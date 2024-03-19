@@ -33,8 +33,14 @@ class ZoneGraphics(Gtk.DrawingArea):
             cr.rectangle(z.x, z.y, z.width, z.height)  # x, y, width, height
             cr.set_source_rgba(z.rgba[0], z.rgba[1], z.rgba[2], z.rgba[3])
             cr.fill_preserve()
-            cr.set_source_rgb(0.25, 0.25, 0.25)
+            cr.set_source_rgb(0.4, 0.4, 0.4)
             cr.stroke()
+            cr.select_font_face("Sans", cairo.FONT_SLANT_NORMAL, cairo.FONT_WEIGHT_NORMAL)
+            cr.set_font_size(50)  # Font size in points
+            cr.set_source_rgb(0.25, 0.25, 0.25)
+            x, y = z.x + (z.width/2), z.y + (z.height/2)
+            cr.move_to(x, y)
+            cr.show_text(label)
 
 
 class ZoneWindow(Gtk.Window):
