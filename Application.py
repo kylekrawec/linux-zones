@@ -1,4 +1,5 @@
 import sys
+import time
 import json
 from enum import Enum
 
@@ -15,6 +16,7 @@ class State(Enum):
     READY = 0
     CTRL_READY = 1
     SET_WINDOW = 2
+    SET_ZONE = 3
 
 
 class AppWindow(Gtk.ApplicationWindow):
@@ -35,6 +37,7 @@ class Application(Gtk.Application):
         self.zone = None
         self.zone_manager = None
         self.presets = None
+        self.settings = None
 
     # Helpers
     def get_zone_label(self, x, y):
@@ -79,6 +82,9 @@ class Application(Gtk.Application):
     def mouse_move(self, x, y):
         GLib.idle_add(self.__mouse_move_callback, x, y)
 
+    def on_activate_shortcut(self):
+        GLib.idle_add(self.__on_activate_shortcut)
+
     def __key_press_callback(self, key):
         match self.state:
             case State.READY:
@@ -88,11 +94,23 @@ class Application(Gtk.Application):
                         self.state = self.state.SET_WINDOW
                     else:
                         self.state = State.CTRL_READY
+            case State.SET_ZONE:
+                for i, name in self.settings.get('zonemapping').items():
+                    if keyboard.KeyCode.from_char(i) == key:
+                        self.zone_manager.set_zones(self.presets[name])
+                        self.zone_manager.show()
 
     def __key_release_callback(self, key):
-        if key == keyboard.Key.cmd_l:
-            self.zone_manager.hide()
-            self.state = State.READY
+        match self.state:
+            case State.SET_ZONE:
+                if key == keyboard.Key.ctrl_l or key == keyboard.Key.cmd_l or key == keyboard.Key.alt_l:
+                    self.state = State.READY
+                else:
+                    GLib.timeout_add_seconds(1, self.zone_manager.hide)
+            case _:
+                if key == keyboard.Key.cmd_l:
+                    self.zone_manager.hide()
+                    self.state = State.READY
 
     def __mouse_click_callback(self, x, y, button, pressed):
         if button == mouse.Button.left:
@@ -116,12 +134,18 @@ class Application(Gtk.Application):
                     self.zone_manager.set_active(new_zone)
                     self.zone = new_zone
 
+    def __on_activate_shortcut(self):
+        self.state = State.SET_ZONE
+
     # Gtk Method Overrides
     def do_startup(self):
         Gtk.Application.do_startup(self)
 
         with open('presets.json') as file:
             self.presets = json.load(file)
+
+        with open('settings.json') as file:
+            self.settings = json.load(file)
 
         self.screen = Wnck.Screen.get_default()
         self.screen.force_update()
@@ -138,6 +162,12 @@ class Application(Gtk.Application):
         # Start the mouse listener in its own thread
         mouse_listener = mouse.Listener(on_click=self.mouse_click, on_move=self.mouse_move)
         mouse_listener.start()
+
+        # Start the hotkey listener in its own thread
+        hotkey_listener = keyboard.GlobalHotKeys({
+            '<ctrl>+<cmd>+<alt>': self.on_activate_shortcut
+        })
+        hotkey_listener.start()
 
         if not self.window:
             self.window = AppWindow(application=self, title="Main Window")
