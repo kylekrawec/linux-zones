@@ -66,21 +66,24 @@ class ZoneWindow(Gtk.Window):
         self.set_events(Gdk.EventMask.POINTER_MOTION_MASK)
 
         # Instantiate zones from configuration
-        self.__zones = {}
+        self.zones = {}
         for label, v in zones.items():
-            self.__zones[label] = ZonePane(v['x'], v['y'], v['width'], v['height'], label)
+            self.zones[label] = ZonePane(v['x'], v['y'], v['width'], v['height'], label)
 
         self.__active_zone = None
-        self.__graphics = ZoneGraphics(self.__zones)
+        self.__graphics = ZoneGraphics(self.zones)
 
         self.add(self.__graphics)
 
     def set_active(self, zone_label: str):
-        if zone_label in self.__zones.keys():
+        if zone_label in self.zones.keys():
             if self.__active_zone is not None:
-                self.__zones[self.__active_zone].set_default()
-            self.__zones[zone_label].set_active()
+                self.zones[self.__active_zone].set_default()
+            self.zones[zone_label].set_active()
             self.__active_zone = zone_label
             self.__graphics.queue_draw()
         else:
             assert "Zone does not exist"
+
+    def get_zones(self):
+        return self.zones

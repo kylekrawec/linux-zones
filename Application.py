@@ -34,24 +34,23 @@ class Application(Gtk.Application):
         self.geometry_mask = (Wnck.WindowMoveResizeMask.X | Wnck.WindowMoveResizeMask.Y | Wnck.WindowMoveResizeMask.WIDTH | Wnck.WindowMoveResizeMask.HEIGHT)
         self.zone = None
         self.zone_manager = None
-        self.preset = None
         self.presets = None
 
     # Helpers
-    def get_zone(self, x, y):
-        for label, v in self.preset.items():
-            if v['x'] <= x < v['x'] + v['width']:
+    def get_zone_label(self, x, y):
+        for label, z in self.zone_manager.zones.items():
+            if z.x <= x < z.x + z.width:
                 return label
 
     def set_window(self):
         cur_x, cur_y = mouse.Controller().position
-        self.zone = self.get_zone(cur_x, cur_y)
+        self.zone = self.get_zone_label(cur_x, cur_y)
 
         # get positions from preset and current zone
-        x = self.preset[self.zone]['x']
-        y = self.preset[self.zone]['y']
-        width = self.preset[self.zone]['width']
-        height = self.preset[self.zone]['height']
+        x = self.zone_manager.zones[self.zone].x
+        y = self.zone_manager.zones[self.zone].y
+        width = self.zone_manager.zones[self.zone].width
+        height = self.zone_manager.zones[self.zone].height
 
         # get active window and set geometry (size & position)
         active_window = self.screen.get_active_window()
@@ -112,7 +111,7 @@ class Application(Gtk.Application):
     def __mouse_move_callback(self, x, y):
         match self.state:
             case State.SET_WINDOW:
-                new_zone = self.get_zone(x, y)
+                new_zone = self.get_zone_label(x, y)
                 if new_zone != self.zone:
                     self.zone_manager.set_active(new_zone)
                     self.zone = new_zone
@@ -123,14 +122,13 @@ class Application(Gtk.Application):
 
         with open('presets.json') as file:
             self.presets = json.load(file)
-        self.preset = self.presets['center-right-bias']
 
         self.screen = Wnck.Screen.get_default()
         self.screen.force_update()
         self.height = self.screen.get_height()
         self.width = self.screen.get_width()
 
-        self.zone_manager = ZoneWindow(self.width, self.height, self.preset)
+        self.zone_manager = ZoneWindow(self.width, self.height, self.presets['six-zones'])
 
     def do_activate(self):
         # Start the keyboard listener in its own thread
