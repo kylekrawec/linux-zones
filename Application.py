@@ -128,7 +128,7 @@ class Application(Gtk.Application):
         self.height = self.screen.get_height()
         self.width = self.screen.get_width()
 
-        self.zone_manager = ZoneWindow(self.width, self.height, self.presets['six-zones'])
+        self.zone_manager = ZoneWindow(self.width, self.height, self.presets[list(self.presets.keys())[0]])
 
     def do_activate(self):
         # Start the keyboard listener in its own thread

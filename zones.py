@@ -1,8 +1,7 @@
-import json
+import cairo
 import gi
 gi.require_version('Gtk', '3.0')
 from gi.repository import Gtk, Gdk
-import cairo
 
 
 class ZonePane(object):
@@ -60,11 +59,6 @@ class ZoneWindow(Gtk.Window):
         # Enable transparency
         self.set_app_paintable(True)
 
-        # TODO Not sure if working or even needed?
-        # Make the window click-through
-        self.set_accept_focus(False)
-        self.set_events(Gdk.EventMask.POINTER_MOTION_MASK)
-
         # Instantiate zones from configuration
         self.zones = {}
         for label, v in zones.items():
@@ -84,6 +78,3 @@ class ZoneWindow(Gtk.Window):
             self.__graphics.queue_draw()
         else:
             assert "Zone does not exist"
-
-    def get_zones(self):
-        return self.zones
