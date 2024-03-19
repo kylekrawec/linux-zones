@@ -20,28 +20,6 @@ class ZonePane(object):
         self.rgba = (.9, .9, .9, 0.6)
 
 
-class ZoneGraphics(Gtk.DrawingArea):
-    def __init__(self, zones: dict[str, ZonePane]):
-        super().__init__()
-        self.zones = zones
-        self.connect('draw', self.on_draw)
-
-    def on_draw(self, widget, cr: cairo.Context):
-        # Draw each zone
-        for label, z in self.zones.items():
-            cr.rectangle(z.x, z.y, z.width, z.height)  # x, y, width, height
-            cr.set_source_rgba(z.rgba[0], z.rgba[1], z.rgba[2], z.rgba[3])
-            cr.fill_preserve()
-            cr.set_source_rgb(0.4, 0.4, 0.4)
-            cr.stroke()
-            cr.select_font_face("Sans", cairo.FONT_SLANT_NORMAL, cairo.FONT_WEIGHT_NORMAL)
-            cr.set_font_size(50)  # Font size in points
-            cr.set_source_rgb(0.25, 0.25, 0.25)
-            x, y = z.x + (z.width/2), z.y + (z.height/2)
-            cr.move_to(x, y)
-            cr.show_text(label)
-
-
 class ZoneWindow(Gtk.Window):
     def __init__(self, width, height, zones):
         super().__init__()
@@ -61,13 +39,25 @@ class ZoneWindow(Gtk.Window):
 
         # Instantiate zones from configuration
         self.zones = {}
-        for label, v in zones.items():
-            self.zones[label] = ZonePane(v['x'], v['y'], v['width'], v['height'], label)
+        self.set_zones(zones)
 
         self.__active_zone = None
-        self.__graphics = ZoneGraphics(self.zones)
+        self.connect('draw', self.on_draw)
 
-        self.add(self.__graphics)
+    def on_draw(self, widget, cr: cairo.Context):
+        # Draw each zone
+        for label, z in self.zones.items():
+            cr.rectangle(z.x, z.y, z.width, z.height)  # x, y, width, height
+            cr.set_source_rgba(z.rgba[0], z.rgba[1], z.rgba[2], z.rgba[3])
+            cr.fill_preserve()
+            cr.set_source_rgb(0.4, 0.4, 0.4)
+            cr.stroke()
+            cr.select_font_face("Sans", cairo.FONT_SLANT_NORMAL, cairo.FONT_WEIGHT_NORMAL)
+            cr.set_font_size(50)  # Font size in points
+            cr.set_source_rgb(0.25, 0.25, 0.25)
+            x, y = z.x + (z.width/2), z.y + (z.height/2)
+            cr.move_to(x, y)
+            cr.show_text(label)
 
     def set_active(self, zone_label: str):
         if zone_label in self.zones.keys():
@@ -75,6 +65,12 @@ class ZoneWindow(Gtk.Window):
                 self.zones[self.__active_zone].set_default()
             self.zones[zone_label].set_active()
             self.__active_zone = zone_label
-            self.__graphics.queue_draw()
+            self.queue_draw()
         else:
             assert "Zone does not exist"
+
+    def set_zones(self, zones: dict):
+        self.zones = {}
+        for label, v in zones.items():
+            self.zones[label] = ZonePane(v['x'], v['y'], v['width'], v['height'], label)
+        self.queue_draw()
