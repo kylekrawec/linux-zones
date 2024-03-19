@@ -39,7 +39,7 @@ class Application(Gtk.Application):
     # Helpers
     def get_zone_label(self, x, y):
         for label, z in self.zone_manager.zones.items():
-            if z.x <= x < z.x + z.width:
+            if z.x <= x < z.x + z.width and z.y <= y < z.y + z.height:
                 return label
 
     def set_window(self):
