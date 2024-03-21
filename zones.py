@@ -13,14 +13,8 @@ class ZonePane(object):
         self.label = label
         self.rgba = (.9, .9, .9, 0.6)
 
-    def set_active(self):
-        self.rgba = (0.2, 0.5, 1, 0.5)
 
-    def set_default(self):
-        self.rgba = (.9, .9, .9, 0.6)
-
-
-class ZoneWindow(Gtk.Window):
+class ZoneDisplay(Gtk.Window):
     def __init__(self, width, height, zones):
         super().__init__()
         self.set_default_size(width, height)
@@ -41,7 +35,6 @@ class ZoneWindow(Gtk.Window):
         self.zones = {}
         self.set_zones(zones)
 
-        self.__active_zone = None
         self.connect('draw', self.on_draw)
 
     def on_draw(self, widget, cr: cairo.Context):
@@ -59,6 +52,32 @@ class ZoneWindow(Gtk.Window):
             cr.move_to(x, y)
             cr.show_text(label)
 
+    def create_zone_pane(self, label: str, bounds: dict):
+        return ZonePane(bounds['x'], bounds['y'], bounds['width'], bounds['height'], label)
+
+    def set_zones(self, zones: dict):
+        self.zones = {}
+        for label, bounds in zones.items():
+            self.zones[label] = self.create_zone_pane(label, bounds)
+        self.queue_draw()
+
+
+class ActiveZonePane(ZonePane):
+    def __init__(self, x, y, width, height, label):
+        super().__init__(x, y, width, height, label)
+
+    def set_active(self):
+        self.rgba = (0.2, 0.5, 1, 0.5)
+
+    def set_default(self):
+        self.rgba = (.9, .9, .9, 0.6)
+
+
+class InteractiveZoneDisplay(ZoneDisplay):
+    def __init__(self, width, height, zones):
+        super().__init__(width, height, zones)
+        self.__active_zone = None
+
     def set_active(self, zone_label: str):
         if zone_label in self.zones.keys():
             if self.__active_zone is not None:
@@ -69,8 +88,5 @@ class ZoneWindow(Gtk.Window):
         else:
             assert "Zone does not exist"
 
-    def set_zones(self, zones: dict):
-        self.zones = {}
-        for label, v in zones.items():
-            self.zones[label] = ZonePane(v['x'], v['y'], v['width'], v['height'], label)
-        self.queue_draw()
+    def create_zone_pane(self, label: str, bounds: dict):
+        return ActiveZonePane(bounds['x'], bounds['y'], bounds['width'], bounds['height'], label)

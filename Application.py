@@ -1,5 +1,4 @@
 import sys
-import time
 import json
 from enum import Enum
 
@@ -9,7 +8,8 @@ gi.require_version('Wnck', '3.0')
 from gi.repository import Gtk, Gio, GLib, Wnck
 
 from pynput import keyboard, mouse
-from zones import ZoneWindow
+from zones import InteractiveZoneDisplay
+from settings import ZoneEditor
 
 
 class State(Enum):
@@ -17,11 +17,6 @@ class State(Enum):
     CTRL_READY = 1
     SET_WINDOW = 2
     SET_ZONE = 3
-
-
-class AppWindow(Gtk.ApplicationWindow):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
 
 
 class Application(Gtk.Application):
@@ -152,7 +147,7 @@ class Application(Gtk.Application):
         self.height = self.screen.get_height()
         self.width = self.screen.get_width()
 
-        self.zone_manager = ZoneWindow(self.width, self.height, self.presets[list(self.presets.keys())[0]])
+        self.zone_manager = InteractiveZoneDisplay(self.width, self.height, self.presets[list(self.presets.keys())[0]])
 
     def do_activate(self):
         # Start the keyboard listener in its own thread
@@ -170,7 +165,7 @@ class Application(Gtk.Application):
         hotkey_listener.start()
 
         if not self.window:
-            self.window = AppWindow(application=self, title="Main Window")
+            self.window = ZoneEditor(1920, 1080, application=self)
 
         # start dummy window for Gtk main thread
         self.window.present()
