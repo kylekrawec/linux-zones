@@ -8,7 +8,7 @@ gi.require_version('Wnck', '3.0')
 from gi.repository import Gtk, Gio, GLib, Wnck
 
 from pynput import keyboard, mouse
-from zones import InteractiveZoneDisplay
+from zones import ZoneWindow, InteractiveZoneDisplay
 from settings import ZoneEditor
 
 
@@ -29,26 +29,26 @@ class Application(Gtk.Application):
         self.state = State.READY
         self.mouse_pressed = False
         self.geometry_mask = (Wnck.WindowMoveResizeMask.X | Wnck.WindowMoveResizeMask.Y | Wnck.WindowMoveResizeMask.WIDTH | Wnck.WindowMoveResizeMask.HEIGHT)
-        self.zone = None
-        self.zone_manager = None
-        self.presets = None
+        self.current_zone = None
+        self.zones = None
         self.settings = None
+        self.normalized_presets = None
 
     # Helpers
     def get_zone_label(self, x, y):
-        for label, z in self.zone_manager.zones.items():
-            if z.x <= x < z.x + z.width and z.y <= y < z.y + z.height:
+        for label, bounds in self.zones.display.zones.items():
+            if bounds.x <= x < bounds.x + bounds.width and bounds.y <= y < bounds.y + bounds.height:
                 return label
 
     def set_window(self):
         cur_x, cur_y = mouse.Controller().position
-        self.zone = self.get_zone_label(cur_x, cur_y)
+        self.current_zone = self.get_zone_label(cur_x, cur_y)
 
         # get positions from preset and current zone
-        x = self.zone_manager.zones[self.zone].x
-        y = self.zone_manager.zones[self.zone].y
-        width = self.zone_manager.zones[self.zone].width
-        height = self.zone_manager.zones[self.zone].height
+        x = self.zones.display.zones[self.current_zone].x
+        y = self.zones.display.zones[self.current_zone].y
+        width = self.zones.display.zones[self.current_zone].width
+        height = self.zones.display.zones[self.current_zone].height
 
         # get active window and set geometry (size & position)
         active_window = self.screen.get_active_window()
@@ -85,15 +85,15 @@ class Application(Gtk.Application):
             case State.READY:
                 if key == keyboard.Key.cmd_l:
                     if self.mouse_pressed:
-                        self.zone_manager.show_all()
+                        self.zones.show_all()
                         self.state = self.state.SET_WINDOW
                     else:
                         self.state = State.CTRL_READY
             case State.SET_ZONE:
                 for i, name in self.settings.get('zonemapping').items():
                     if keyboard.KeyCode.from_char(i) == key:
-                        self.zone_manager.set_zones(self.presets[name])
-                        self.zone_manager.show()
+                        self.zones.display.set_zones(self.normalized_presets.get(name))
+                        self.zones.show()
 
     def __key_release_callback(self, key):
         match self.state:
@@ -101,10 +101,10 @@ class Application(Gtk.Application):
                 if key == keyboard.Key.ctrl_l or key == keyboard.Key.cmd_l or key == keyboard.Key.alt_l:
                     self.state = State.READY
                 else:
-                    GLib.timeout_add_seconds(1, self.zone_manager.hide)
+                    GLib.timeout_add_seconds(1, self.zones.hide)
             case _:
                 if key == keyboard.Key.cmd_l:
-                    self.zone_manager.hide()
+                    self.zones.hide()
                     self.state = State.READY
 
     def __mouse_click_callback(self, x, y, button, pressed):
@@ -112,22 +112,22 @@ class Application(Gtk.Application):
             self.mouse_pressed = pressed
             match self.state:
                 case State.CTRL_READY:
-                    self.zone_manager.show_all()
+                    self.zones.show_all()
                     if pressed:
                         self.state = State.SET_WINDOW
                 case State.SET_WINDOW:
                     if not pressed:
                         self.set_window()
-                        self.zone_manager.hide()
+                        self.zones.hide()
                         self.state = State.CTRL_READY
 
     def __mouse_move_callback(self, x, y):
         match self.state:
             case State.SET_WINDOW:
                 new_zone = self.get_zone_label(x, y)
-                if new_zone != self.zone:
-                    self.zone_manager.set_active(new_zone)
-                    self.zone = new_zone
+                if new_zone != self.current_zone:
+                    self.zones.display.set_active(new_zone)
+                    self.current_zone = new_zone
 
     def __on_activate_shortcut(self):
         self.state = State.SET_ZONE
@@ -137,17 +137,21 @@ class Application(Gtk.Application):
         Gtk.Application.do_startup(self)
 
         with open('presets.json') as file:
-            self.presets = json.load(file)
+            self.normalized_presets = json.load(file)
+        default_preset = self.normalized_presets[list(self.normalized_presets.keys())[0]]
 
         with open('settings.json') as file:
             self.settings = json.load(file)
 
+        # get screen dimentions
         self.screen = Wnck.Screen.get_default()
         self.screen.force_update()
         self.height = self.screen.get_height()
         self.width = self.screen.get_width()
 
-        self.zone_manager = InteractiveZoneDisplay(self.width, self.height, self.presets[list(self.presets.keys())[0]])
+        # create zone display and window container
+        display = InteractiveZoneDisplay(default_preset)
+        self.zones = ZoneWindow(self.width, self.height, display)
 
     def do_activate(self):
         # Start the keyboard listener in its own thread
@@ -168,6 +172,7 @@ class Application(Gtk.Application):
             self.window = ZoneEditor(1920, 1080, application=self)
 
         # start dummy window for Gtk main thread
+        self.window.show_all()
         self.window.present()
 
 

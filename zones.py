@@ -5,39 +5,28 @@ from gi.repository import Gtk, Gdk
 
 
 class ZonePane(object):
-    def __init__(self, x, y, width, height, label):
-        self.x = x
-        self.y = y
-        self.width = width
-        self.height = height
+    def __init__(self, label, bounds):
+        self.x = bounds['x']
+        self.y = bounds['y']
+        self.width = bounds['width']
+        self.height = bounds['height']
         self.label = label
         self.rgba = (.9, .9, .9, 0.6)
 
 
-class ZoneDisplay(Gtk.Window):
-    def __init__(self, width, height, zones):
+class ZoneDisplay(Gtk.DrawingArea):
+    def __init__(self, preset):
         super().__init__()
-        self.set_default_size(width, height)
+        self.zones = None
+        self.preset = preset
 
-        # Set the window type hint to make it undecorated and generally ignored by the window manager
-        self.set_type_hint(Gdk.WindowTypeHint.DOCK)
+        # set zones when widget layout has been performed
+        self.connect("size-allocate", self.on_size_allocate)
 
-        # Set the window's visual so it supports transparency.
-        screen = self.get_screen()
-        visual = screen.get_rgba_visual()
-        if visual and screen.is_composited():
-            self.set_visual(visual)
-
-        # Enable transparency
-        self.set_app_paintable(True)
-
-        # Instantiate zones from configuration
-        self.zones = {}
-        self.set_zones(zones)
-
+        # Initialize the drawing area
         self.connect('draw', self.on_draw)
 
-    def on_draw(self, widget, cr: cairo.Context):
+    def on_draw(self, widget, cr: cairo.Context) -> None:
         # Draw each zone
         for label, z in self.zones.items():
             cr.rectangle(z.x, z.y, z.width, z.height)  # x, y, width, height
@@ -52,19 +41,34 @@ class ZoneDisplay(Gtk.Window):
             cr.move_to(x, y)
             cr.show_text(label)
 
-    def create_zone_pane(self, label: str, bounds: dict):
-        return ZonePane(bounds['x'], bounds['y'], bounds['width'], bounds['height'], label)
+    def on_size_allocate(self, widget, allocation):
+        self.set_zones(self.preset)
 
-    def set_zones(self, zones: dict):
+    def scale_preset(self, preset: dict) -> dict:
+        scaled_preset = {}
+        for label, bounds in preset.items():
+            scaled_preset[label] = {
+                'x': round(self.get_allocated_width() * bounds['x']),
+                'y': round(self.get_allocated_height() * bounds['y']),
+                'width': round(self.get_allocated_width() * bounds['width']),
+                'height': round(self.get_allocated_height() * bounds['height'])
+            }
+        return scaled_preset
+
+    def create_zone_pane(self, label: str, bounds: dict) -> ZonePane:
+        return ZonePane(label, bounds)
+
+    def set_zones(self, preset: dict) -> None:
         self.zones = {}
-        for label, bounds in zones.items():
+        self.preset = self.scale_preset(preset)
+        for label, bounds in self.preset.items():
             self.zones[label] = self.create_zone_pane(label, bounds)
         self.queue_draw()
 
 
 class ActiveZonePane(ZonePane):
-    def __init__(self, x, y, width, height, label):
-        super().__init__(x, y, width, height, label)
+    def __init__(self, label, bounds):
+        super().__init__(label, bounds)
 
     def set_active(self):
         self.rgba = (0.2, 0.5, 1, 0.5)
@@ -74,8 +78,8 @@ class ActiveZonePane(ZonePane):
 
 
 class InteractiveZoneDisplay(ZoneDisplay):
-    def __init__(self, width, height, zones):
-        super().__init__(width, height, zones)
+    def __init__(self, preset: dict):
+        super().__init__(preset)
         self.__active_zone = None
 
     def set_active(self, zone_label: str):
@@ -84,9 +88,36 @@ class InteractiveZoneDisplay(ZoneDisplay):
                 self.zones[self.__active_zone].set_default()
             self.zones[zone_label].set_active()
             self.__active_zone = zone_label
+            self.__active_zone = zone_label
             self.queue_draw()
         else:
             assert "Zone does not exist"
 
-    def create_zone_pane(self, label: str, bounds: dict):
-        return ActiveZonePane(bounds['x'], bounds['y'], bounds['width'], bounds['height'], label)
+    def create_zone_pane(self, label: str, bounds: dict) -> ActiveZonePane:
+        return ActiveZonePane(label, bounds)
+
+
+class ZoneWindow(Gtk.Window):
+    def __init__(self, width: int, height: int, display: ZoneDisplay):
+        super().__init__()
+        self.set_default_size(width, height)
+
+        # create container for display
+        container = Gtk.Box()
+        self.add(container)
+
+        # add display to container
+        self.display = display
+        container.pack_start(self.display, expand=True, fill=True, padding=0)
+
+        # Set the window type hint to make it undecorated and generally ignored by the window manager
+        self.set_type_hint(Gdk.WindowTypeHint.DOCK)
+
+        # Set the window's visual so it supports transparency.
+        screen = self.get_screen()
+        visual = screen.get_rgba_visual()
+        if visual and screen.is_composited():
+            self.set_visual(visual)
+
+        # Enable transparency
+        self.set_app_paintable(True)
