@@ -88,7 +88,6 @@ class InteractiveZoneDisplay(ZoneDisplay):
                 self.zones[self.__active_zone].set_default()
             self.zones[zone_label].set_active()
             self.__active_zone = zone_label
-            self.__active_zone = zone_label
             self.queue_draw()
         else:
             assert "Zone does not exist"
