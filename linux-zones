@@ -1,0 +1,5 @@
+#!/bin/bash
+PATH=/usr/bin:/bin:/usr/sbin:/sbin
+cd "$HOME"/linux-zones/ || exit
+source .venv/bin/activate
+python3 Application.py
