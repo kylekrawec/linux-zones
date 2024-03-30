@@ -11,7 +11,7 @@ from pynput import keyboard, mouse
 from zones import ZoneWindow, InteractiveZoneDisplay
 from settings import ZoneEditor
 
-path = "/home/kyle/linux-zones/"
+path = "/home/kyle/linux-zones/settings/"
 
 class State(Enum):
     READY = 0
@@ -137,11 +137,11 @@ class Application(Gtk.Application):
     def do_startup(self):
         Gtk.Application.do_startup(self)
 
-        with open(path+'/settings/presets.json') as file:
+        with open(path+'presets.json') as file:
             self.normalized_presets = json.load(file)
         default_preset = self.normalized_presets[list(self.normalized_presets.keys())[0]]
 
-        with open(path+'/settings/settings.json') as file:
+        with open(path+'settings.json') as file:
             self.settings = json.load(file)
 
         # get screen dimentions
@@ -174,7 +174,7 @@ class Application(Gtk.Application):
 
         # start dummy window for Gtk main thread
         self.window.show_all()
-        # self.window.hide()
+        self.window.hide()
 
 
 if __name__ == "__main__":

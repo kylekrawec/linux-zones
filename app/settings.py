@@ -4,7 +4,7 @@ gi.require_version('Gtk', '3.0')
 from gi.repository import Gtk, Gio, GLib
 
 from zones import ZoneDisplay
-path = "/home/kyle/linux-zones/"
+path = "/home/kyle/linux-zones/settings/"
 
 
 class ZoneEditor(Gtk.ApplicationWindow):
@@ -13,7 +13,7 @@ class ZoneEditor(Gtk.ApplicationWindow):
         self.set_default_size(width, height)
         self.set_title("Zone Editor")
 
-        with open(path+'/settings/templates.json') as file:
+        with open(path+'templates.json') as file:
             self.templates = json.load(file)
 
         self.template_grid = Gtk.Grid(column_spacing=10)
