@@ -1,6 +1,10 @@
 {
   "zonemapping": {
-    "0": "center-right-bias",
-    "1": "six-zones"
+    "0": "center-bias",
+    "1": "center-right-bias",
+    "2": "right-bias",
+    "3": "thirds",
+    "4": "quarters",
+    "6": "six-zones"
   }
 }
