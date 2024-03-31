@@ -20,7 +20,7 @@ class ZoneEditor(Gtk.ApplicationWindow):
 
         container = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
         label = Gtk.Label(label='priority-grid')
-        template = ZoneDisplay(self.templates.priority_grid, self.style.basic_zone)
+        template = ZoneDisplay(self.templates.priority_grid, self.style.template_zone)
         container.pack_start(label, expand=False, fill=False, padding=10)
         container.pack_start(template, expand=True, fill=True, padding=10)  # Usually, you want your custom drawing area to expand
         container.set_size_request(250, 250)

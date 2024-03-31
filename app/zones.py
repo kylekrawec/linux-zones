@@ -20,11 +20,7 @@ class ZoneDisplay(Gtk.DrawingArea):
         super().__init__()
         self.zones = None
         self.preset = preset
-
-        # Extract some styles
         self.style = style
-        self.border = style.color.border
-        self.font = style.font
 
         # Set zones when widget layout has been performed
         self.connect("size-allocate", self.on_size_allocate)
@@ -35,14 +31,19 @@ class ZoneDisplay(Gtk.DrawingArea):
     def on_draw(self, widget, cr: cairo.Context) -> None:
         # Draw each zone
         for label, z in self.zones.items():
-            cr.rectangle(z.x, z.y, z.width, z.height)  # x, y, width, height
+            # Draw zone background
+            cr.rectangle(z.x, z.y, z.width, z.height)
             cr.set_source_rgba(z.color.r, z.color.g, z.color.b, z.color.a)
             cr.fill_preserve()
-            cr.set_source_rgb(self.border.r, self.border.g, self.border.b)
+            # Draw zone border
+            cr.set_source_rgb(self.style.border.color.r, self.style.border.color.g, self.style.border.color.b)
+            cr.set_line_width(self.style.border.weight)
             cr.stroke()
-            cr.select_font_face(self.font.face)
-            cr.set_font_size(self.font.size)
-            cr.set_source_rgb(self.font.color.r, self.font.color.g, self.font.color.b)
+            # Assign zone label
+            cr.select_font_face(self.style.font.face)
+            cr.set_font_size(self.style.font.size)
+            cr.set_source_rgb(self.style.font.color.r, self.style.font.color.g, self.style.font.color.b)
+            # Position zone
             x_pos, y_pos = z.x + (z.width/2), z.y + (z.height/2)
             cr.move_to(x_pos, y_pos)
             cr.show_text(label)
