@@ -1,5 +1,5 @@
 {
-  "zonemapping": {
+  "zonemap": {
     "0": "center-bias",
     "1": "center-right-bias",
     "2": "right-bias",

@@ -1,17 +1,16 @@
 import sys
-import json
 from enum import Enum
-
-import gi
-gi.require_version('Gtk', '3.0')
-gi.require_version('Wnck', '3.0')
-from gi.repository import Gtk, Gio, GLib, Wnck
-
 from pynput import keyboard, mouse
+import gi
+
+from config import Config
 from zones import ZoneWindow, InteractiveZoneDisplay
 from settings import ZoneEditor
 
-path = "/home/kyle/linux-zones/settings/"
+gi.require_version('Gtk', '3.0')
+gi.require_version('Wnck', '3.0')
+from gi.repository import Gtk, GLib, Wnck
+
 
 class State(Enum):
     READY = 0
@@ -33,7 +32,8 @@ class Application(Gtk.Application):
         self.current_zone = None
         self.zones = None
         self.settings = None
-        self.normalized_presets = None
+        self.presets = None
+        self.styles = None
 
     # Helpers
     def get_zone_label(self, x, y):
@@ -91,9 +91,9 @@ class Application(Gtk.Application):
                     else:
                         self.state = State.CTRL_READY
             case State.SET_ZONE:
-                for i, name in self.settings.get('zonemapping').items():
+                for i, name in self.settings.zonemap.items():
                     if keyboard.KeyCode.from_char(i) == key:
-                        self.zones.display.set_zones(self.normalized_presets.get(name))
+                        self.zones.display.set_zones(self.presets.get(name))
                         self.zones.show()
 
     def __key_release_callback(self, key):
@@ -137,21 +137,20 @@ class Application(Gtk.Application):
     def do_startup(self):
         Gtk.Application.do_startup(self)
 
-        with open(path+'presets.json') as file:
-            self.normalized_presets = json.load(file)
-        default_preset = self.normalized_presets[list(self.normalized_presets.keys())[0]]
-
-        with open(path+'settings.json') as file:
-            self.settings = json.load(file)
-
         # get screen dimentions
         self.screen = Wnck.Screen.get_default()
         self.screen.force_update()
         self.height = self.screen.get_height()
         self.width = self.screen.get_width()
 
+        # load configuration
+        self.settings = Config('settings.json').load()
+        self.presets = Config('presets.json').load()
+        self.styles = Config('styles.json').load()
+
         # create zone display and window container
-        display = InteractiveZoneDisplay(default_preset)
+        default_preset = self.presets[list(self.presets.keys())[0]]
+        display = InteractiveZoneDisplay(default_preset, self.styles.active_zone)
         self.zones = ZoneWindow(self.width, self.height, display)
 
     def do_activate(self):
@@ -174,7 +173,7 @@ class Application(Gtk.Application):
 
         # start dummy window for Gtk main thread
         self.window.show_all()
-        self.window.hide()
+        # self.window.hide()
 
 
 if __name__ == "__main__":

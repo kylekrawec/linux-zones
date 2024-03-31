@@ -1,26 +1,32 @@
 import cairo
 import gi
+
 gi.require_version('Gtk', '3.0')
 from gi.repository import Gtk, Gdk
 
 
 class ZonePane(object):
-    def __init__(self, label, bounds):
+    def __init__(self, label, bounds, style):
         self.x = bounds['x']
         self.y = bounds['y']
         self.width = bounds['width']
         self.height = bounds['height']
         self.label = label
-        self.rgba = (.9, .9, .9, 0.6)
+        self.color = style.color.default
 
 
 class ZoneDisplay(Gtk.DrawingArea):
-    def __init__(self, preset):
+    def __init__(self, preset: dict, style):
         super().__init__()
         self.zones = None
         self.preset = preset
 
-        # set zones when widget layout has been performed
+        # Extract some styles
+        self.style = style
+        self.border = style.color.border
+        self.font = style.font
+
+        # Set zones when widget layout has been performed
         self.connect("size-allocate", self.on_size_allocate)
 
         # Initialize the drawing area
@@ -30,15 +36,15 @@ class ZoneDisplay(Gtk.DrawingArea):
         # Draw each zone
         for label, z in self.zones.items():
             cr.rectangle(z.x, z.y, z.width, z.height)  # x, y, width, height
-            cr.set_source_rgba(z.rgba[0], z.rgba[1], z.rgba[2], z.rgba[3])
+            cr.set_source_rgba(z.color.r, z.color.g, z.color.b, z.color.a)
             cr.fill_preserve()
-            cr.set_source_rgb(0.4, 0.4, 0.4)
+            cr.set_source_rgb(self.border.r, self.border.g, self.border.b)
             cr.stroke()
-            cr.select_font_face("Sans", cairo.FONT_SLANT_NORMAL, cairo.FONT_WEIGHT_NORMAL)
-            cr.set_font_size(50)  # Font size in points
-            cr.set_source_rgb(0.25, 0.25, 0.25)
-            x, y = z.x + (z.width/2), z.y + (z.height/2)
-            cr.move_to(x, y)
+            cr.select_font_face(self.font.face)
+            cr.set_font_size(self.font.size)
+            cr.set_source_rgb(self.font.color.r, self.font.color.g, self.font.color.b)
+            x_pos, y_pos = z.x + (z.width/2), z.y + (z.height/2)
+            cr.move_to(x_pos, y_pos)
             cr.show_text(label)
 
     def on_size_allocate(self, widget, allocation):
@@ -56,7 +62,7 @@ class ZoneDisplay(Gtk.DrawingArea):
         return scaled_preset
 
     def create_zone_pane(self, label: str, bounds: dict) -> ZonePane:
-        return ZonePane(label, bounds)
+        return ZonePane(label, bounds, self.style)
 
     def set_zones(self, preset: dict) -> None:
         self.zones = {}
@@ -67,19 +73,20 @@ class ZoneDisplay(Gtk.DrawingArea):
 
 
 class ActiveZonePane(ZonePane):
-    def __init__(self, label, bounds):
-        super().__init__(label, bounds)
+    def __init__(self, label, bounds, style):
+        super().__init__(label, bounds, style)
+        self.style = style
 
     def set_active(self):
-        self.rgba = (0.2, 0.5, 1, 0.5)
+        self.color = self.style.color.active
 
     def set_default(self):
-        self.rgba = (.9, .9, .9, 0.6)
+        self.color = self.style.color.default
 
 
 class InteractiveZoneDisplay(ZoneDisplay):
-    def __init__(self, preset: dict):
-        super().__init__(preset)
+    def __init__(self, preset: dict, style):
+        super().__init__(preset, style)
         self.__active_zone = None
 
     def set_active(self, zone_label: str):
@@ -93,7 +100,7 @@ class InteractiveZoneDisplay(ZoneDisplay):
             assert "Zone does not exist"
 
     def create_zone_pane(self, label: str, bounds: dict) -> ActiveZonePane:
-        return ActiveZonePane(label, bounds)
+        return ActiveZonePane(label, bounds, self.style)
 
 
 class ZoneWindow(Gtk.Window):
