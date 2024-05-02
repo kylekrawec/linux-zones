@@ -6,5 +6,6 @@
     "3": "thirds",
     "4": "quarters",
     "6": "six-zones"
-  }
+  },
+  "default_preset": "center-right-bias"
 }

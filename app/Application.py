@@ -169,7 +169,7 @@ class Application(Gtk.Application):
         self.styles = Config('styles.json').load()
 
         # create zone display and window container
-        default_preset = self.presets[list(self.presets.keys())[0]]
+        default_preset = self.presets[self.settings.get('default_preset')]
         display = InteractiveZoneDisplay(default_preset, self.styles.active_zone)
         self.zones = ZoneWindow(display)
 
