@@ -28,7 +28,12 @@ class Application(Gtk.Application):
         self.mouse_pressed = False
         self.geometry_mask = (Wnck.WindowMoveResizeMask.X | Wnck.WindowMoveResizeMask.Y | Wnck.WindowMoveResizeMask.WIDTH | Wnck.WindowMoveResizeMask.HEIGHT)
         self.current_zone = None
+
+        # app windows
         self.zones = None
+        self.zone_editor = None
+
+        # configuration files
         self.settings = None
         self.presets = None
         self.styles = None
@@ -91,7 +96,7 @@ class Application(Gtk.Application):
                     # update workarea and set display dimentions if user modifies the workarea during runtime
                     if self.__get_workarea() != self.workarea:
                         self.workarea = self.__get_workarea()
-                        self.__set_zonewindow_bounds(self.workarea)
+                        self.__set_window_bounds(self.zones, self.workarea)
 
                     if self.mouse_pressed:
                         self.zones.show_all()
@@ -148,9 +153,9 @@ class Application(Gtk.Application):
         primary_monitor = display.get_primary_monitor()
         return primary_monitor.get_workarea()
 
-    def __set_zonewindow_bounds(self, workarea: Gdk.Rectangle):
-        self.zones.move(workarea.x, workarea.y)
-        self.zones.resize(workarea.width, workarea.height)
+    def __set_window_bounds(self, window: Gtk.ApplicationWindow, bounds: Gdk.Rectangle):
+        window.move(bounds.x, bounds.y)
+        window.resize(bounds.width, bounds.height)
 
     # Gtk Method Overrides
     def do_startup(self):
@@ -173,8 +178,11 @@ class Application(Gtk.Application):
         display = InteractiveZoneDisplay(default_preset, self.styles.active_zone)
         self.zones = ZoneWindow(display)
 
-        # set window position, size and trigger allocation process
-        self.__set_zonewindow_bounds(self.workarea)
+        # create settings windows
+        self.zone_editor = ZoneEditor()
+
+        # set position and dimentions for all app windows
+        self.__set_window_bounds(self.zones, self.workarea)
 
     def do_activate(self):
         # start the keyboard listener in its own thread
@@ -193,6 +201,7 @@ class Application(Gtk.Application):
 
         # add application windows
         self.add_window(self.zones)
+        self.add_window(self.zone_editor)
 
 
 if __name__ == "__main__":
