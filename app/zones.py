@@ -19,7 +19,8 @@ class ZoneDisplay(Gtk.DrawingArea):
     def __init__(self, preset: dict, style):
         super().__init__()
         self.zones = None
-        self.preset = preset
+        self.universal_bounds = preset
+        self.scaled_bounds = None
         self.style = style
 
         # Set zones when widget layout has been performed
@@ -49,7 +50,7 @@ class ZoneDisplay(Gtk.DrawingArea):
             cr.show_text(label)
 
     def on_size_allocate(self, widget, allocation):
-        self.set_zones(self.preset)
+        self.set_zones(self.universal_bounds)
 
     def scale_preset(self, preset: dict) -> dict:
         scaled_preset = {}
@@ -67,8 +68,9 @@ class ZoneDisplay(Gtk.DrawingArea):
 
     def set_zones(self, preset: dict) -> None:
         self.zones = {}
-        self.preset = self.scale_preset(preset)
-        for label, bounds in self.preset.items():
+        self.universal_bounds = preset
+        self.scaled_bounds = self.scale_preset(self.universal_bounds)
+        for label, bounds in self.scaled_bounds.items():
             self.zones[label] = self.create_zone_pane(label, bounds)
         self.queue_draw()
 
