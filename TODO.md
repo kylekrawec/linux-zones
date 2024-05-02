@@ -6,7 +6,6 @@
 
 ---
 
-    - Windows snapping often extends beyond the lower border of the screen indicating that other elements such as the dock and top bar interfere.
 
 ## Priority
 

@@ -9,7 +9,7 @@ from settings import ZoneEditor
 
 gi.require_version('Gtk', '3.0')
 gi.require_version('Wnck', '3.0')
-from gi.repository import Gtk, GLib, Wnck
+from gi.repository import Gtk, GLib, Wnck, Gdk
 
 
 class State(Enum):
@@ -134,7 +134,13 @@ class Application(Gtk.Application):
     def do_startup(self):
         Gtk.Application.do_startup(self)
 
-        # get screen dimentions
+        # get work area dimentions
+        display = Gdk.Display.get_default()
+        # Fetch the primary monitor number
+        primary_monitor = display.get_primary_monitor()
+        workarea = primary_monitor.get_workarea()
+
+        # get screen interaction
         self.screen = Wnck.Screen.get_default()
         self.screen.force_update()
 
@@ -148,8 +154,9 @@ class Application(Gtk.Application):
         display = InteractiveZoneDisplay(default_preset, self.styles.active_zone)
         self.zones = ZoneWindow(display)
 
-        # set window size and trigger allocation process
-        self.zones.set_size_request(self.screen.get_width(), self.screen.get_height())
+        # set window position, size and trigger allocation process
+        self.zones.move(workarea.x, workarea.y)
+        self.zones.set_size_request(workarea.width, workarea.height)
         self.zones.show_all() # this is not ideal but it works
         self.zones.hide()
 
