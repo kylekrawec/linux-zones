@@ -108,13 +108,9 @@ class ZoneWindow(Gtk.ApplicationWindow):
     def __init__(self, display: ZoneDisplay):
         super().__init__()
 
-        # create container for display
-        container = Gtk.Box()
-        self.add(container)
-
-        # add display to container
+        # add display type to window
         self.display = display
-        container.pack_start(self.display, expand=True, fill=True, padding=0)
+        self.add(self.display)
 
         # Set the window type hint to make it undecorated and generally ignored by the window manager
         self.set_type_hint(Gdk.WindowTypeHint.DOCK)
