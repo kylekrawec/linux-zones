@@ -104,10 +104,9 @@ class InteractiveZoneDisplay(ZoneDisplay):
         return ActiveZonePane(label, bounds, self.style)
 
 
-class ZoneWindow(Gtk.Window):
-    def __init__(self, width: int, height: int, display: ZoneDisplay):
+class ZoneWindow(Gtk.ApplicationWindow):
+    def __init__(self, display: ZoneDisplay):
         super().__init__()
-        self.set_default_size(width, height)
 
         # create container for display
         container = Gtk.Box()

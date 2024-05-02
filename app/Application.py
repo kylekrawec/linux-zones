@@ -21,11 +21,8 @@ class State(Enum):
 
 class Application(Gtk.Application):
     def __init__(self, *args, **kwargs):
-        super().__init__(*args, application_id="org.example.windowsystem", **kwargs)
-        self.window = None
+        super().__init__(*args, application_id="org.example.linuxzones", **kwargs)
         self.screen = None
-        self.width = None
-        self.height = None
         self.state = State.READY
         self.mouse_pressed = False
         self.geometry_mask = (Wnck.WindowMoveResizeMask.X | Wnck.WindowMoveResizeMask.Y | Wnck.WindowMoveResizeMask.WIDTH | Wnck.WindowMoveResizeMask.HEIGHT)
@@ -140,8 +137,6 @@ class Application(Gtk.Application):
         # get screen dimentions
         self.screen = Wnck.Screen.get_default()
         self.screen.force_update()
-        self.height = self.screen.get_height()
-        self.width = self.screen.get_width()
 
         # load configuration
         self.settings = Config('settings.json').load()
@@ -151,29 +146,30 @@ class Application(Gtk.Application):
         # create zone display and window container
         default_preset = self.presets[list(self.presets.keys())[0]]
         display = InteractiveZoneDisplay(default_preset, self.styles.active_zone)
-        self.zones = ZoneWindow(self.width, self.height, display)
+        self.zones = ZoneWindow(display)
+
+        # set window size and trigger allocation process
+        self.zones.set_size_request(self.screen.get_width(), self.screen.get_height())
+        self.zones.show_all() # this is not ideal but it works
+        self.zones.hide()
 
     def do_activate(self):
-        # Start the keyboard listener in its own thread
+        # start the keyboard listener in its own thread
         keyboard_listener = keyboard.Listener(on_press=self.key_press, on_release=self.key_release)
         keyboard_listener.start()
 
-        # Start the mouse listener in its own thread
+        # start the mouse listener in its own thread
         mouse_listener = mouse.Listener(on_click=self.mouse_click, on_move=self.mouse_move)
         mouse_listener.start()
 
-        # Start the hotkey listener in its own thread
+        # start the hotkey listener in its own thread
         hotkey_listener = keyboard.GlobalHotKeys({
             '<ctrl>+<cmd>+<alt>': self.on_activate_shortcut
         })
         hotkey_listener.start()
 
-        if not self.window:
-            self.window = ZoneEditor(1920, 1080, application=self)
-
-        # start dummy window for Gtk main thread
-        self.window.show_all()
-        # self.window.hide()
+        # add application windows
+        self.add_window(self.zones)
 
 
 if __name__ == "__main__":
