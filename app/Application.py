@@ -23,6 +23,7 @@ class Application(Gtk.Application):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, application_id="org.example.linuxzones", **kwargs)
         self.screen = None
+        self.workarea = None
         self.state = State.READY
         self.mouse_pressed = False
         self.geometry_mask = (Wnck.WindowMoveResizeMask.X | Wnck.WindowMoveResizeMask.Y | Wnck.WindowMoveResizeMask.WIDTH | Wnck.WindowMoveResizeMask.HEIGHT)
@@ -39,6 +40,7 @@ class Application(Gtk.Application):
                 return label
 
     def set_window(self):
+        # get zone the cursor is located within
         cur_x, cur_y = mouse.Controller().position
         self.current_zone = self.get_zone_label(cur_x, cur_y)
 
@@ -47,6 +49,10 @@ class Application(Gtk.Application):
         y = self.zones.display.zones[self.current_zone].y
         width = self.zones.display.zones[self.current_zone].width
         height = self.zones.display.zones[self.current_zone].height
+
+        # translate zone window position to global coordinates
+        x += self.workarea.x # consider outputing the corrected global coordinates directly from the display.zones object instead of fixing the issue here
+        y += self.workarea.y
 
         # get active window and set geometry (size & position)
         active_window = self.screen.get_active_window()
@@ -82,6 +88,11 @@ class Application(Gtk.Application):
         match self.state:
             case State.READY:
                 if key == keyboard.Key.cmd_l:
+                    # update workarea and set display dimentions if user modifies the workarea during runtime
+                    if self.__get_workarea() != self.workarea:
+                        self.workarea = self.__get_workarea()
+                        self.__set_zonewindow_bounds(self.workarea)
+
                     if self.mouse_pressed:
                         self.zones.show_all()
                         self.state = self.state.SET_WINDOW
@@ -130,17 +141,25 @@ class Application(Gtk.Application):
     def __on_activate_shortcut(self):
         self.state = State.SET_ZONE
 
-    # Gtk Method Overrides
-    def do_startup(self):
-        Gtk.Application.do_startup(self)
-
+    def __get_workarea(self) -> Gdk.Rectangle:
         # get work area dimentions
         display = Gdk.Display.get_default()
         # Fetch the primary monitor number
         primary_monitor = display.get_primary_monitor()
-        workarea = primary_monitor.get_workarea()
+        return primary_monitor.get_workarea()
 
-        # get screen interaction
+    def __set_zonewindow_bounds(self, workarea: Gdk.Rectangle):
+        self.zones.move(workarea.x, workarea.y)
+        self.zones.resize(workarea.width, workarea.height)
+
+    # Gtk Method Overrides
+    def do_startup(self):
+        Gtk.Application.do_startup(self)
+
+        # get workarea
+        self.workarea = self.__get_workarea()
+
+        # get screen interaction object
         self.screen = Wnck.Screen.get_default()
         self.screen.force_update()
 
@@ -155,10 +174,7 @@ class Application(Gtk.Application):
         self.zones = ZoneWindow(display)
 
         # set window position, size and trigger allocation process
-        self.zones.move(workarea.x, workarea.y)
-        self.zones.set_size_request(workarea.width, workarea.height)
-        self.zones.show_all() # this is not ideal but it works
-        self.zones.hide()
+        self.__set_zonewindow_bounds(self.workarea)
 
     def do_activate(self):
         # start the keyboard listener in its own thread
