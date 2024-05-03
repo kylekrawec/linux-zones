@@ -125,3 +125,7 @@ class ZoneWindow(Gtk.ApplicationWindow):
 
         # Enable transparency
         self.set_app_paintable(True)
+
+    def set_window_bounds(self, bounds: Gdk.Rectangle):
+        self.move(bounds.x, bounds.y)
+        self.resize(bounds.width, bounds.height)

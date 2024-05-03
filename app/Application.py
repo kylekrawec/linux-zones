@@ -96,7 +96,7 @@ class Application(Gtk.Application):
                     # update workarea and set display dimentions if user modifies the workarea during runtime
                     if self.__get_workarea() != self.workarea:
                         self.workarea = self.__get_workarea()
-                        self.__set_window_bounds(self.zones, self.workarea)
+                        self.zones.set_window_bounds(self.workarea)
 
                     if self.mouse_pressed:
                         self.zones.show_all()
@@ -153,10 +153,6 @@ class Application(Gtk.Application):
         primary_monitor = display.get_primary_monitor()
         return primary_monitor.get_workarea()
 
-    def __set_window_bounds(self, window: Gtk.ApplicationWindow, bounds: Gdk.Rectangle):
-        window.move(bounds.x, bounds.y)
-        window.resize(bounds.width, bounds.height)
-
     # Gtk Method Overrides
     def do_startup(self):
         Gtk.Application.do_startup(self)
@@ -182,7 +178,7 @@ class Application(Gtk.Application):
         self.zone_editor = ZoneEditor()
 
         # set position and dimentions for all app windows
-        self.__set_window_bounds(self.zones, self.workarea)
+        self.zones.set_window_bounds(self.workarea)
 
     def do_activate(self):
         # start the keyboard listener in its own thread
