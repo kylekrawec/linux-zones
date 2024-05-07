@@ -163,6 +163,9 @@ class Application(Gtk.Application):
         self.presets = Config('presets.json').load()
         self.styles = Config('styles.json').load()
 
+        # load css styles
+        Config('style.css').load()
+
     def do_activate(self):
         # start the keyboard listener in its own thread
         keyboard_listener = keyboard.Listener(on_press=self.key_press, on_release=self.key_release)

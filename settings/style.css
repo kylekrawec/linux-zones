@@ -1,0 +1,20 @@
+.zone-editor {
+    font-family: sans-serif;
+    font-size: 15px;
+    color: #757575;
+    padding: 25px;
+}
+
+.zone-display-box {
+    font-family: sans-serif;
+    font-size: 15px;
+    color: #757575;
+    border: 1px solid #dbdbdb;
+    border-radius: 10px;
+    margin: 10px;
+    padding: 10px;
+}
+
+.zone-display-box-header {
+    padding-bottom: 10px;
+}

@@ -1,11 +1,33 @@
 import gi
 
 gi.require_version('Gtk', '3.0')
-from gi.repository import Gtk, Gdk
+from gi.repository import Gtk
 
 import display
 from zones import ZoneDisplay
 from config import Config
+
+
+class ZoneDisplayBox(Gtk.Box):
+    def __init__(self, preset_name: str, preset: dict, size, style):
+        super().__init__()
+        self.set_orientation(Gtk.Orientation.VERTICAL)
+
+        header = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
+        title = Gtk.Label(label=preset_name)
+        button = Gtk.Button(label="edit", valign=Gtk.Align.END)
+        header.pack_start(title, expand=False, fill=False, padding=0)
+        header.pack_end(button, expand=False, fill=False, padding=0)
+
+        zone_display = ZoneDisplay(preset, style)
+        zone_display.set_size_request(size, size)
+
+        self.add(header)
+        self.add(zone_display)
+
+        # add css styles
+        header.get_style_context().add_class('zone-display-box-header')
+        self.get_style_context().add_class('zone-display-box')
 
 
 class ZoneEditor(Gtk.ApplicationWindow):
@@ -16,12 +38,12 @@ class ZoneEditor(Gtk.ApplicationWindow):
 
         # set window size to 16:9 aspect ratio based on half the monitor height
         self.height = int(self.workarea.height * 0.5)
-        self.width = int(self.height * 16/9)
-        self.set_size_request(int(self.width/2), int(self.height/2))
+        self.width = int(self.height * 16 / 9)
+        self.set_size_request(int(self.width / 2), int(self.height / 2))
         self.set_default_size(self.width, self.height)
 
         # center window to work space
-        self.move((self.workarea.width - self.width)/2, (self.workarea.height - self.height)/2)
+        self.move((self.workarea.width - self.width) / 2, (self.workarea.height - self.height) / 2)
 
         # load templates, presets, and other configurations
         self.templates = Config('templates.json').load()
@@ -46,26 +68,24 @@ class ZoneEditor(Gtk.ApplicationWindow):
         self.layout_box.add(custom)
 
         self.add(self.layout_box)
+
+        # add css styles
+        self.layout_box.get_style_context().add_class('zone-editor')
+
         self.layout_box.show_all()
-
-    def zone_display_box(self, preset_name: str, preset: dict) -> Gtk.Box:
-        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
-
-        label = Gtk.Label(label=preset_name)
-        zone_display = ZoneDisplay(preset, self.style.template_zone)
-        # assign size to ZoneDisplay beacuse its a Gtk.DrawingArea
-        size = int(min(self.width, self.height) * 0.25)
-        zone_display.set_size_request(size, size)
-
-        box.add(label)
-        box.add(zone_display)
-
-        return box
 
     def display_presets(self, presets) -> Gtk.FlowBox:
         flowbox = Gtk.FlowBox(valign=Gtk.Align.START, max_children_per_line=6, homogeneous=True)
+
+        # assign size to ZoneDisplay beacuse its a Gtk.DrawingArea
+        size = int(min(self.width, self.height) * 0.25)
+
         # add each zones display variant to flowbox
         for preset_name, preset in presets.items():
-            flowbox.add(self.zone_display_box(preset_name, preset))
+            # format preset names
+            words = preset_name.replace('-', ' ').split(' ')
+            preset_name = ' '.join([word.capitalize() for word in words])
+
+            flowbox.add(ZoneDisplayBox(preset_name, preset, size, self.style.template_zone))
 
         return flowbox
