@@ -1,29 +1,71 @@
-import json
 import gi
-gi.require_version('Gtk', '3.0')
-from gi.repository import Gtk, Gio, GLib
 
+gi.require_version('Gtk', '3.0')
+from gi.repository import Gtk, Gdk
+
+import display
 from zones import ZoneDisplay
 from config import Config
 
 
 class ZoneEditor(Gtk.ApplicationWindow):
-    def __init__(self, width, height, *args, **kwargs):
+    def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.set_default_size(width, height)
         self.set_title("Zone Editor")
+        self.workarea = display.get_workarea()
+
+        # set window size to 16:9 aspect ratio based on half the monitor height
+        self.height = int(self.workarea.height * 0.5)
+        self.width = int(self.height * 16/9)
+        self.set_size_request(int(self.width/2), int(self.height/2))
+        self.set_default_size(self.width, self.height)
+
+        # center window to work space
+        self.move((self.workarea.width - self.width)/2, (self.workarea.height - self.height)/2)
+
+        # load templates, presets, and other configurations
         self.templates = Config('templates.json').load()
+        self.presets = Config('presets.json').load()
         self.style = Config('styles.json').load()
 
+        # create vertical layout container to hold all window contents
+        self.layout_container = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
 
-        self.template_grid = Gtk.Grid(column_spacing=10)
+        # form the container to hold all templates
+        templates = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        templates.add(Gtk.Label(label='Templates'))
+        templates.add(self.display_presets(self.templates))
 
-        container = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
-        label = Gtk.Label(label='priority-grid')
-        template = ZoneDisplay(self.templates.priority_grid, self.style.template_zone)
-        container.pack_start(label, expand=False, fill=False, padding=10)
-        container.pack_start(template, expand=True, fill=True, padding=10)  # Usually, you want your custom drawing area to expand
-        container.set_size_request(250, 250)
+        # form the container to hold all custom presets
+        custom = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        custom.add(Gtk.Label(label='Custom'))
+        custom.add(self.display_presets(self.presets))
 
-        self.template_grid.attach(container, 1, 1, 1, 1)
-        self.add(self.template_grid)
+        # add all containers to main container
+        self.layout_container.add(templates)
+        self.layout_container.add(custom)
+
+        self.add(self.layout_container)
+        self.layout_container.show_all()
+
+    def zone_display_container(self, preset_name: str, preset: dict) -> Gtk.Box:
+        container = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+
+        label = Gtk.Label(label=preset_name)
+        zone_display = ZoneDisplay(preset, self.style.template_zone)
+        # assign size to ZoneDisplay beacuse its a Gtk.DrawingArea
+        size = int(min(self.width, self.height) * 0.25)
+        zone_display.set_size_request(size, size)
+
+        container.add(label)
+        container.add(zone_display)
+
+        return container
+
+    def display_presets(self, presets) -> Gtk.FlowBox:
+        flowbox = Gtk.FlowBox(valign=Gtk.Align.START, max_children_per_line=6, homogeneous=True)
+        # add each zones display variant to flowbox
+        for preset_name, preset in presets.items():
+            flowbox.add(self.zone_display_container(preset_name, preset))
+
+        return flowbox
