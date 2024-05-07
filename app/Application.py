@@ -1,15 +1,16 @@
+import gi
+gi.require_version('Gtk', '3.0')
+gi.require_version('Wnck', '3.0')
+from gi.repository import Gtk, GLib, Wnck
+
 import sys
 from enum import Enum
 from pynput import keyboard, mouse
-import gi
 
+import display
 from config import Config
 from zones import ZoneWindow, InteractiveZoneDisplay
 from settings import ZoneEditor
-
-gi.require_version('Gtk', '3.0')
-gi.require_version('Wnck', '3.0')
-from gi.repository import Gtk, GLib, Wnck, Gdk
 
 
 class State(Enum):
@@ -94,8 +95,8 @@ class Application(Gtk.Application):
             case State.READY:
                 if key == keyboard.Key.cmd_l:
                     # update workarea and set display dimentions if user modifies the workarea during runtime
-                    if self.__get_workarea() != self.workarea:
-                        self.workarea = self.__get_workarea()
+                    if display.get_workarea() != self.workarea:
+                        self.workarea = display.get_workarea()
                         self.zones.set_window_bounds(self.workarea)
 
                     if self.mouse_pressed:
@@ -146,19 +147,12 @@ class Application(Gtk.Application):
     def __on_activate_shortcut(self):
         self.state = State.SET_ZONE
 
-    def __get_workarea(self) -> Gdk.Rectangle:
-        # get work area dimentions
-        display = Gdk.Display.get_default()
-        # Fetch the primary monitor number
-        primary_monitor = display.get_primary_monitor()
-        return primary_monitor.get_workarea()
-
     # Gtk Method Overrides
     def do_startup(self):
         Gtk.Application.do_startup(self)
 
         # get workarea
-        self.workarea = self.__get_workarea()
+        self.workarea = display.get_workarea()
 
         # get screen interaction object
         self.screen = Wnck.Screen.get_default()
@@ -168,17 +162,6 @@ class Application(Gtk.Application):
         self.settings = Config('settings.json').load()
         self.presets = Config('presets.json').load()
         self.styles = Config('styles.json').load()
-
-        # create zone display and window container
-        default_preset = self.presets[self.settings.get('default_preset')]
-        display = InteractiveZoneDisplay(default_preset, self.styles.active_zone)
-        self.zones = ZoneWindow(display)
-
-        # create settings windows
-        self.zone_editor = ZoneEditor()
-
-        # set position and dimentions for all app windows
-        self.zones.set_window_bounds(self.workarea)
 
     def do_activate(self):
         # start the keyboard listener in its own thread
@@ -195,9 +178,17 @@ class Application(Gtk.Application):
         })
         hotkey_listener.start()
 
-        # add application windows
-        self.add_window(self.zones)
-        self.add_window(self.zone_editor)
+        # create zone display and window container
+        default_preset = self.presets[self.settings.get('default_preset')]
+        zone_display = InteractiveZoneDisplay(default_preset, self.styles.active_zone)
+        self.zones = ZoneWindow(zone_display)
+
+        # create settings windows
+        self.zone_editor = ZoneEditor(application=self)
+        self.zone_editor.present()
+
+        # set position and dimentions for all app windows
+        self.zones.set_window_bounds(self.workarea)
 
 
 if __name__ == "__main__":
