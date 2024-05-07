@@ -28,28 +28,28 @@ class ZoneEditor(Gtk.ApplicationWindow):
         self.presets = Config('presets.json').load()
         self.style = Config('styles.json').load()
 
-        # create vertical layout container to hold all window contents
-        self.layout_container = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        # create vertical layout box to hold all window contents
+        self.layout_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
 
-        # form the container to hold all templates
+        # form the box to hold all templates
         templates = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
         templates.add(Gtk.Label(label='Templates'))
         templates.add(self.display_presets(self.templates))
 
-        # form the container to hold all custom presets
+        # form the box to hold all custom presets
         custom = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
         custom.add(Gtk.Label(label='Custom'))
         custom.add(self.display_presets(self.presets))
 
-        # add all containers to main container
-        self.layout_container.add(templates)
-        self.layout_container.add(custom)
+        # add all boxs to main box
+        self.layout_box.add(templates)
+        self.layout_box.add(custom)
 
-        self.add(self.layout_container)
-        self.layout_container.show_all()
+        self.add(self.layout_box)
+        self.layout_box.show_all()
 
-    def zone_display_container(self, preset_name: str, preset: dict) -> Gtk.Box:
-        container = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+    def zone_display_box(self, preset_name: str, preset: dict) -> Gtk.Box:
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
 
         label = Gtk.Label(label=preset_name)
         zone_display = ZoneDisplay(preset, self.style.template_zone)
@@ -57,15 +57,15 @@ class ZoneEditor(Gtk.ApplicationWindow):
         size = int(min(self.width, self.height) * 0.25)
         zone_display.set_size_request(size, size)
 
-        container.add(label)
-        container.add(zone_display)
+        box.add(label)
+        box.add(zone_display)
 
-        return container
+        return box
 
     def display_presets(self, presets) -> Gtk.FlowBox:
         flowbox = Gtk.FlowBox(valign=Gtk.Align.START, max_children_per_line=6, homogeneous=True)
         # add each zones display variant to flowbox
         for preset_name, preset in presets.items():
-            flowbox.add(self.zone_display_container(preset_name, preset))
+            flowbox.add(self.zone_display_box(preset_name, preset))
 
         return flowbox
