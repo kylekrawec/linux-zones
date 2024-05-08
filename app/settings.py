@@ -74,18 +74,18 @@ class ZoneEditor(Gtk.ApplicationWindow):
 
         self.layout_box.show_all()
 
-    def display_presets(self, presets) -> Gtk.FlowBox:
-        flowbox = Gtk.FlowBox(valign=Gtk.Align.START, max_children_per_line=6, homogeneous=True)
+    def display_presets(self, presets) -> Gtk.Box:
+        box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
 
         # assign size to ZoneDisplay beacuse its a Gtk.DrawingArea
         size = int(min(self.width, self.height) * 0.25)
 
-        # add each zones display variant to flowbox
+        # add each zones display variant to box
         for preset_name, preset in presets.items():
             # format preset names
             words = preset_name.replace('-', ' ').split(' ')
             preset_name = ' '.join([word.capitalize() for word in words])
 
-            flowbox.add(ZoneDisplayBox(preset_name, preset, size, self.style.template_zone))
+            box.add(ZoneDisplayBox(preset_name, preset, size, self.style.template_zone))
 
-        return flowbox
+        return box
