@@ -31,21 +31,10 @@ class Application(Gtk.Application):
         self.settings = None
         self.presets = None
 
-    # Helpers
-    def get_zone(self, x, y) -> zones.ZonePane:
-        assert self.workarea.width != 0 and self.workarea.height != 0, 'Workarea width and height must not be zero.'
-        # convert to universal coordinates
-        x = x / self.workarea.width
-        y = y / self.workarea.height
-
-        for child in self.zone_display.get_zones():
-            if child.x <= x < child.x + child.width and child.y <= y < child.y + child.height:
-                return child
-
     def set_window(self):
         # get zone the cursor is located within
         cur_x, cur_y = mouse.Controller().position
-        self.current_zone = self.get_zone(cur_x, cur_y)
+        self.current_zone = self.zone_display.get_zone(cur_x, cur_y)
         bounds = base.ScaledBounds(self.current_zone.bounds, self.workarea)
 
         # get active window and set geometry (size & position)
@@ -128,7 +117,7 @@ class Application(Gtk.Application):
     def __mouse_move_callback(self, x, y):
         match self.state:
             case State.SET_WINDOW:
-                new_zone = self.get_zone(x, y)
+                new_zone = self.zone_display.get_zone(x, y)
                 if new_zone != self.current_zone:
                     self.zone_display.set_active(new_zone)
                     self.current_zone = new_zone

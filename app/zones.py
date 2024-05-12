@@ -44,6 +44,16 @@ class ZoneDisplayWindow(base.TransparentApplicationWindow):
     def get_zones(self) -> [ZonePane]:
         return self.__container.get_children()
 
+    def get_zone(self, x, y) -> ZonePane:
+        assert self.get_allocated_width() != 0 and self.get_allocated_height() != 0, 'Allocated width and height must not be zero.'
+        # convert from pixel to scaled coordinates
+        x = x / self.get_allocated_width()
+        y = y / self.get_allocated_height()
+
+        for child in self.__container.get_children():
+            if child.x <= x < child.x + child.width and child.y <= y < child.y + child.height:
+                return child
+
     def set_active(self, zone: ZonePane) -> None:
         assert zone in self.__container.get_children(), "Zone must be a child of " + self.__container.__class__.__name__
         if self.__active_zone:
