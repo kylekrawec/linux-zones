@@ -4,20 +4,14 @@ gi.require_version('Wnck', '3.0')
 from gi.repository import Gtk, GLib, Wnck
 
 import sys
-from enum import Enum
 from pynput import keyboard, mouse
 
+import base
 import display
+import zones
+from base import State
 from config import Config
-from zones import ZoneWindow, InteractiveZoneDisplay
 from settings import ZoneEditor
-
-
-class State(Enum):
-    READY = 0
-    CTRL_READY = 1
-    SET_WINDOW = 2
-    SET_ZONE = 3
 
 
 class Application(Gtk.Application):
@@ -27,42 +21,37 @@ class Application(Gtk.Application):
         self.workarea = None
         self.state = State.READY
         self.mouse_pressed = False
-        self.geometry_mask = (Wnck.WindowMoveResizeMask.X | Wnck.WindowMoveResizeMask.Y | Wnck.WindowMoveResizeMask.WIDTH | Wnck.WindowMoveResizeMask.HEIGHT)
         self.current_zone = None
 
         # app windows
-        self.zones = None
+        self.zone_display = None
         self.zone_editor = None
 
         # configuration files
         self.settings = None
         self.presets = None
-        self.styles = None
 
     # Helpers
-    def get_zone_label(self, x, y):
-        for label, bounds in self.zones.display.zones.items():
-            if bounds.x <= x < bounds.x + bounds.width and bounds.y <= y < bounds.y + bounds.height:
-                return label
+    def get_zone(self, x, y) -> zones.ZonePane:
+        assert self.workarea.width != 0 and self.workarea.height != 0, 'Workarea width and height must not be zero.'
+        # convert to universal coordinates
+        x = x / self.workarea.width
+        y = y / self.workarea.height
+
+        for child in self.zone_display.get_zones():
+            if child.x <= x < child.x + child.width and child.y <= y < child.y + child.height:
+                return child
 
     def set_window(self):
         # get zone the cursor is located within
         cur_x, cur_y = mouse.Controller().position
-        self.current_zone = self.get_zone_label(cur_x, cur_y)
-
-        # get positions from preset and current zone
-        x = self.zones.display.zones[self.current_zone].x
-        y = self.zones.display.zones[self.current_zone].y
-        width = self.zones.display.zones[self.current_zone].width
-        height = self.zones.display.zones[self.current_zone].height
-
-        # translate zone window position to global coordinates
-        x += self.workarea.x # consider outputing the corrected global coordinates directly from the display.zones object instead of fixing the issue here
-        y += self.workarea.y
+        self.current_zone = self.get_zone(cur_x, cur_y)
+        bounds = base.ScaledBounds(self.current_zone.bounds, self.workarea)
 
         # get active window and set geometry (size & position)
         active_window = self.screen.get_active_window()
-        active_window.set_geometry(Wnck.WindowGravity(0), self.geometry_mask, x, y, width, height)
+        geometry_mask = (Wnck.WindowMoveResizeMask.X | Wnck.WindowMoveResizeMask.Y | Wnck.WindowMoveResizeMask.WIDTH | Wnck.WindowMoveResizeMask.HEIGHT)
+        active_window.set_geometry(Wnck.WindowGravity(0), geometry_mask, bounds.x, bounds.y, bounds.width, bounds.height)
 
     # Controller
     def key_press(self, key):
@@ -97,18 +86,18 @@ class Application(Gtk.Application):
                     # update workarea and set display dimentions if user modifies the workarea during runtime
                     if display.get_workarea() != self.workarea:
                         self.workarea = display.get_workarea()
-                        self.zones.set_window_bounds(self.workarea)
+                        self.zone_display.set_window_bounds(self.workarea)
 
                     if self.mouse_pressed:
-                        self.zones.show_all()
+                        self.zone_display.show_all()
                         self.state = self.state.SET_WINDOW
                     else:
                         self.state = State.CTRL_READY
             case State.SET_ZONE:
                 for i, name in self.settings.zonemap.items():
                     if keyboard.KeyCode.from_char(i) == key:
-                        self.zones.display.set_zones(self.presets.get(name))
-                        self.zones.show()
+                        self.zone_display.set_preset(self.presets.get(name))
+                        self.zone_display.show_all()
 
     def __key_release_callback(self, key):
         match self.state:
@@ -116,10 +105,10 @@ class Application(Gtk.Application):
                 if key == keyboard.Key.ctrl_l or key == keyboard.Key.cmd_l or key == keyboard.Key.alt_l:
                     self.state = State.READY
                 else:
-                    self.zones.hide()
+                    self.zone_display.hide()
             case _:
                 if key == keyboard.Key.cmd_l:
-                    self.zones.hide()
+                    self.zone_display.hide()
                     self.state = State.READY
 
     def __mouse_click_callback(self, x, y, button, pressed):
@@ -127,21 +116,21 @@ class Application(Gtk.Application):
             self.mouse_pressed = pressed
             match self.state:
                 case State.CTRL_READY:
-                    self.zones.show_all()
+                    self.zone_display.show_all()
                     if pressed:
                         self.state = State.SET_WINDOW
                 case State.SET_WINDOW:
                     if not pressed:
                         self.set_window()
-                        self.zones.hide()
+                        self.zone_display.hide()
                         self.state = State.CTRL_READY
 
     def __mouse_move_callback(self, x, y):
         match self.state:
             case State.SET_WINDOW:
-                new_zone = self.get_zone_label(x, y)
+                new_zone = self.get_zone(x, y)
                 if new_zone != self.current_zone:
-                    self.zones.display.set_active(new_zone)
+                    self.zone_display.set_active(new_zone)
                     self.current_zone = new_zone
 
     def __on_activate_shortcut(self):
@@ -161,7 +150,6 @@ class Application(Gtk.Application):
         # load configuration
         self.settings = Config('settings.json').load()
         self.presets = Config('presets.json').load()
-        self.styles = Config('styles.json').load()
 
         # load css styles
         Config('style.css').load()
@@ -183,15 +171,12 @@ class Application(Gtk.Application):
 
         # create zone display and window container
         default_preset = self.presets[self.settings.get('default_preset')]
-        zone_display = InteractiveZoneDisplay(default_preset, self.styles.active_zone)
-        self.zones = ZoneWindow(zone_display)
+        self.zone_display = zones.ZoneDisplayWindow(default_preset)
+        self.zone_display.set_window_bounds(self.workarea)
 
         # create settings windows
         self.zone_editor = ZoneEditor(application=self)
-        self.zone_editor.present()
-
-        # set position and dimentions for all app windows
-        self.zones.set_window_bounds(self.workarea)
+        self.zone_editor.show_all()
 
 
 if __name__ == "__main__":

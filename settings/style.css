@@ -1,3 +1,24 @@
+
+/* primary zone display classes */
+.zone-pane {
+    border: 1px solid #666666;
+    font-family: sans-serif;
+    font-size: 35px;
+    color: #404040;
+}
+
+.active-zone {
+    opacity: 0.5;
+    background-color: #3380ff;
+}
+
+.passive-zone {
+    opacity: 0.6;
+    background-color: #e6e6e6;
+}
+
+
+/* zone editor classes */
 .zone-editor {
     font-family: sans-serif;
     font-size: 15px;
@@ -5,7 +26,17 @@
     padding: 25px;
 }
 
-.zone-display-box {
+
+/* zone preset display classes */
+.preset-display-pane {
+    font-size: 0px;
+    background-color: #e6e6e6;
+    margin: 2px;
+    border-radius: 3px;
+}
+
+
+.preset-display-box {
     font-family: sans-serif;
     font-size: 15px;
     color: #757575;
@@ -15,6 +46,6 @@
     padding: 10px;
 }
 
-.zone-display-box-header {
+.preset-display-box-header {
     padding-bottom: 10px;
 }

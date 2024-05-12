@@ -3,31 +3,46 @@ import gi
 gi.require_version('Gtk', '3.0')
 from gi.repository import Gtk
 
+import base
 import display
-from zones import ZoneDisplay
+import zones
 from config import Config
 
 
-class ZoneDisplayBox(Gtk.Box):
-    def __init__(self, preset_name: str, preset: dict, size, style):
+class PresetDisplay(base.GtkStyleable, Gtk.Box):
+    def __init__(self, preset_name: str, preset: dict):
         super().__init__()
         self.set_orientation(Gtk.Orientation.VERTICAL)
 
         header = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
         title = Gtk.Label(label=preset_name)
-        button = Gtk.Button(label="edit", valign=Gtk.Align.END)
+        button = Gtk.Button(label="edit")
+        zone_display = zones.ZoneContainer(preset).add_zone_style_class('preset-display-pane')
+        zone_display.set_size_request(200, 175)
+
         header.pack_start(title, expand=False, fill=False, padding=0)
         header.pack_end(button, expand=False, fill=False, padding=0)
-
-        zone_display = ZoneDisplay(preset, style)
-        zone_display.set_size_request(size, size)
 
         self.add(header)
         self.add(zone_display)
 
         # add css styles
-        header.get_style_context().add_class('zone-display-box-header')
-        self.get_style_context().add_class('zone-display-box')
+        header.get_style_context().add_class('preset-display-box-header')
+        self.add_style_class('preset-display-box')
+
+
+class PresetDisplayLayout(Gtk.Box):
+    def __init__(self, presets: dict):
+        super().__init__()
+        self.set_orientation(Gtk.Orientation.HORIZONTAL)
+
+        # add each zones display variant to box
+        for preset_name, preset in presets.items():
+            # format preset names
+            words = preset_name.replace('-', ' ').split(' ')
+            preset_name = ' '.join([word.capitalize() for word in words])
+
+            self.add(PresetDisplay(preset_name, preset))
 
 
 class ZoneEditor(Gtk.ApplicationWindow):
@@ -46,9 +61,8 @@ class ZoneEditor(Gtk.ApplicationWindow):
         self.move((self.workarea.width - self.width) / 2, (self.workarea.height - self.height) / 2)
 
         # load templates, presets, and other configurations
-        self.templates = Config('templates.json').load()
-        self.presets = Config('presets.json').load()
-        self.style = Config('styles.json').load()
+        template_presets = Config('templates.json').load()
+        custom_presets = Config('presets.json').load()
 
         # create vertical layout box to hold all window contents
         self.layout_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
@@ -56,14 +70,13 @@ class ZoneEditor(Gtk.ApplicationWindow):
         # form the box to hold all templates
         templates = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
         templates.add(Gtk.Label(label='Templates'))
-        templates.add(self.display_presets(self.templates))
+        templates.add(PresetDisplayLayout(template_presets))
 
         # form the box to hold all custom presets
         custom = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
         custom.add(Gtk.Label(label='Custom'))
-        custom.add(self.display_presets(self.presets))
+        custom.add(PresetDisplayLayout(custom_presets))
 
-        # add all boxs to main box
         self.layout_box.add(templates)
         self.layout_box.add(custom)
 
@@ -71,21 +84,3 @@ class ZoneEditor(Gtk.ApplicationWindow):
 
         # add css styles
         self.layout_box.get_style_context().add_class('zone-editor')
-
-        self.layout_box.show_all()
-
-    def display_presets(self, presets) -> Gtk.Box:
-        box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
-
-        # assign size to ZoneDisplay beacuse its a Gtk.DrawingArea
-        size = int(min(self.width, self.height) * 0.25)
-
-        # add each zones display variant to box
-        for preset_name, preset in presets.items():
-            # format preset names
-            words = preset_name.replace('-', ' ').split(' ')
-            preset_name = ' '.join([word.capitalize() for word in words])
-
-            box.add(ZoneDisplayBox(preset_name, preset, size, self.style.template_zone))
-
-        return box
