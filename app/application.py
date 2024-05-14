@@ -11,7 +11,7 @@ import display
 import zones
 from base import State
 from config import Config
-from settings import ZoneEditor
+from settings import Settings
 
 
 class Application(Gtk.Application):
@@ -25,7 +25,7 @@ class Application(Gtk.Application):
 
         # app windows
         self.zone_display = None
-        self.zone_editor = None
+        self.settings_window = None
 
         # configuration files
         self.settings = None
@@ -164,8 +164,8 @@ class Application(Gtk.Application):
         self.zone_display.set_window_bounds(self.workarea)
 
         # create settings windows
-        self.zone_editor = ZoneEditor(application=self)
-        self.zone_editor.show_all()
+        self.settings_window = Settings(application=self)
+        self.settings_window.show_all()
 
 
 if __name__ == "__main__":

@@ -45,10 +45,10 @@ class PresetDisplayLayout(Gtk.Box):
             self.add(PresetDisplay(preset_name, preset))
 
 
-class ZoneEditor(Gtk.ApplicationWindow):
+class Settings(Gtk.ApplicationWindow):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.set_title("Zone Editor")
+        self.set_title("Settings")
         self.workarea = display.get_workarea()
 
         # set window size to 16:9 aspect ratio based on half the monitor height
