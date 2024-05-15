@@ -31,10 +31,12 @@ class PresetDisplay(base.GtkStyleable, Gtk.Box):
         self.add_style_class('preset-display-box')
 
 
-class PresetDisplayLayout(Gtk.Box):
+class PresetDisplayLayout(Gtk.FlowBox):
     def __init__(self, presets: dict):
         super().__init__()
         self.set_orientation(Gtk.Orientation.HORIZONTAL)
+        self.set_selection_mode(Gtk.SelectionMode.NONE)
+        self.set_homogeneous(True)
 
         # add each zones display variant to box
         for preset_name, preset in presets.items():
@@ -45,7 +47,7 @@ class PresetDisplayLayout(Gtk.Box):
             self.add(PresetDisplay(preset_name, preset))
 
 
-class Settings(Gtk.ApplicationWindow):
+class Settings(Gtk.ApplicationWindow, Gtk.ScrolledWindow):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.set_title("Settings")
@@ -65,22 +67,25 @@ class Settings(Gtk.ApplicationWindow):
         custom_presets = Config('presets.json').load()
 
         # create vertical layout box to hold all window contents
-        self.layout_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        layout = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        layout.get_style_context().add_class('settings-window')
 
-        # form the box to hold all templates
-        templates = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
-        templates.add(Gtk.Label(label='Templates'))
-        templates.add(PresetDisplayLayout(template_presets))
+        # stack widgets for template preset display
+        template_header = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
+        template_header.pack_start(Gtk.Label(label='Templates'), expand=False, fill=False, padding=12)
+        layout.add(template_header)
+        layout.add(PresetDisplayLayout(template_presets))
 
-        # form the box to hold all custom presets
-        custom = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
-        custom.add(Gtk.Label(label='Custom'))
-        custom.add(PresetDisplayLayout(custom_presets))
+        # stack widgets for custom preset display
+        presets_header = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
+        presets_header.pack_start(Gtk.Label(label='Custom'), expand=False, fill=False, padding=12)
+        layout.add(presets_header)
+        layout.add(PresetDisplayLayout(custom_presets))
 
-        self.layout_box.add(templates)
-        self.layout_box.add(custom)
+        # add scollable functionality
+        scrolled_window = Gtk.ScrolledWindow()
+        scrolled_window.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC)
 
-        self.add(self.layout_box)
-
-        # add css styles
-        self.layout_box.get_style_context().add_class('zone-editor')
+        # nest contents in scrollable window
+        scrolled_window.add(layout)
+        self.add(scrolled_window)
