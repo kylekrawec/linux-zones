@@ -1,8 +1,10 @@
 import gi
-import base
 
 gi.require_version('Gtk', '3.0')
 from gi.repository import Gtk, Gdk
+
+import base
+from display import get_workarea
 
 
 class ZonePane(base.GtkStyleable, Gtk.Box):
@@ -48,6 +50,7 @@ class ZoneDisplayWindow(base.TransparentApplicationWindow):
         self.__container = ZoneContainer(preset).add_zone_style_class('zone-pane', 'passive-zone')
         self.__active_zone = None
         self.add(self.__container)
+        self.set_window_bounds(get_workarea())
 
     def get_zones(self) -> [ZonePane]:
         return self.__container.get_children()
@@ -73,7 +76,3 @@ class ZoneDisplayWindow(base.TransparentApplicationWindow):
         self.remove(self.__container)
         self.__container = ZoneContainer(preset).add_zone_style_class('zone-pane', 'passive-zone')
         self.add(self.__container)
-
-    def set_window_bounds(self, bounds: Gdk.Rectangle) -> None:
-        self.move(bounds.x, bounds.y)
-        self.resize(bounds.width, bounds.height)

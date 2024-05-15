@@ -28,6 +28,10 @@ class TransparentApplicationWindow(Gtk.ApplicationWindow):
         # Enable transparency
         self.set_app_paintable(True)
 
+    def set_window_bounds(self, bounds: Gdk.Rectangle) -> None:
+        self.move(bounds.x, bounds.y)
+        self.resize(bounds.width, bounds.height)
+
 
 class ScaledBounds(Gdk.Rectangle):
     def __init__(self, bounds: dict, allocation: Gdk.Rectangle):

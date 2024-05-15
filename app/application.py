@@ -161,7 +161,6 @@ class Application(Gtk.Application):
         # create zone display and window container
         default_preset = self.presets[self.settings.get('default_preset')]
         self.zone_display = zones.ZoneDisplayWindow(default_preset)
-        self.zone_display.set_window_bounds(self.workarea)
 
         # create settings windows
         self.settings_window = Settings(application=self)
