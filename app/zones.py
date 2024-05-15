@@ -19,7 +19,7 @@ class ZonePane(base.GtkStyleable, Gtk.Box):
         self.width = bounds.width
         self.height = bounds.height
 
-    def size_allocate(self, allocation, new_bounds: Gdk.Rectangle = None):
+    def resize(self, allocation, new_bounds: Gdk.Rectangle = None):
         if new_bounds:
             self.__set_bounds(new_bounds)
         self.size_allocate(base.ScaledBounds(self.bounds, allocation))
@@ -34,7 +34,7 @@ class ZoneContainer(Gtk.Fixed):
 
     def __on_size_allocate(self, widget, allocation):
         for child in self.get_children():
-            child.size_allocate(allocation)
+            child.resize(allocation)
 
     def add_zone_style_class(self, *style_classes):
         for child in self.get_children():
