@@ -8,13 +8,21 @@ from gi.repository import Gtk, Gdk
 class ZonePane(base.GtkStyleable, Gtk.Box):
     def __init__(self, bounds: Gdk.Rectangle, label: str = None):
         Gtk.Box.__init__(self)
+        self.__set_bounds(bounds)
+        if label:
+            self.set_center_widget(Gtk.Label(label=label))
+
+    def __set_bounds(self, bounds: Gdk.Rectangle):
         self.bounds = bounds
         self.x = bounds.x
         self.y = bounds.y
         self.width = bounds.width
         self.height = bounds.height
-        if label:
-            self.set_center_widget(Gtk.Label(label=label))
+
+    def size_allocate(self, allocation, new_bounds: Gdk.Rectangle = None):
+        if new_bounds:
+            self.__set_bounds(new_bounds)
+        self.size_allocate(base.ScaledBounds(self.bounds, allocation))
 
 
 class ZoneContainer(Gtk.Fixed):
@@ -26,7 +34,7 @@ class ZoneContainer(Gtk.Fixed):
 
     def __on_size_allocate(self, widget, allocation):
         for child in self.get_children():
-            child.size_allocate(base.ScaledBounds(child.bounds, allocation))
+            child.size_allocate(allocation)
 
     def add_zone_style_class(self, *style_classes):
         for child in self.get_children():
