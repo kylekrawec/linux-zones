@@ -8,30 +8,30 @@ from display import get_workarea
 
 
 class ZonePane(base.GtkStyleable, Gtk.Box):
-    def __init__(self, bounds: Gdk.Rectangle, label: str = None):
+    def __init__(self, preset: base.ScaledPreset):
         Gtk.Box.__init__(self)
-        self.__set_bounds(bounds)
-        if label:
-            self.set_center_widget(Gtk.Label(label=label))
+        self.__set_preset(preset)
+        if preset.label:
+            self.set_center_widget(Gtk.Label(label=preset.label))
 
-    def __set_bounds(self, bounds: Gdk.Rectangle):
-        self.bounds = bounds
-        self.x = bounds.x
-        self.y = bounds.y
-        self.width = bounds.width
-        self.height = bounds.height
+    def __set_preset(self, preset: base.ScaledPreset):
+        self.preset = preset
+        self.x = preset.x
+        self.y = preset.y
+        self.width = preset.width
+        self.height = preset.height
 
-    def resize(self, allocation, new_bounds: Gdk.Rectangle = None):
+    def resize(self, allocation, new_bounds: base.ScaledPreset = None):
         if new_bounds:
-            self.__set_bounds(new_bounds)
-        self.size_allocate(base.ScaledBounds(self.bounds, allocation))
+            self.__set_preset(new_bounds)
+        self.size_allocate(base.ScaledPreset(self.preset, allocation))
 
 
 class ZoneContainer(Gtk.Fixed):
-    def __init__(self, preset: dict):
+    def __init__(self, presets: [base.ScaledPreset]):
         super().__init__()
-        for label, bounds in preset.items():
-            self.add(ZonePane(bounds, label))
+        for preset in presets:
+            self.add(ZonePane(preset))
         self.connect('size-allocate', self.__on_size_allocate)
 
     def __on_size_allocate(self, widget, allocation):
@@ -45,9 +45,9 @@ class ZoneContainer(Gtk.Fixed):
 
 
 class ZoneDisplayWindow(base.TransparentApplicationWindow):
-    def __init__(self, preset: dict):
+    def __init__(self, presets: [base.ScaledPreset]):
         super().__init__()
-        self.__container = ZoneContainer(preset).add_zone_style_class('zone-pane', 'passive-zone')
+        self.__container = ZoneContainer(presets).add_zone_style_class('zone-pane', 'passive-zone')
         self.__active_zone = None
         self.add(self.__container)
         self.set_window_bounds(get_workarea())

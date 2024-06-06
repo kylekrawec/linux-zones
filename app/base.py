@@ -33,20 +33,22 @@ class TransparentApplicationWindow(Gtk.ApplicationWindow):
         self.resize(bounds.width, bounds.height)
 
 
-class ScaledBounds(Gdk.Rectangle):
-    def __init__(self, bounds: dict, allocation: Gdk.Rectangle):
+class ScaledPreset(Gdk.Rectangle):
+    def __init__(self, preset: dict, allocation: Gdk.Rectangle):
         super().__init__()
-        self.x = allocation.x + allocation.width * bounds.get('x')
-        self.y = allocation.y + allocation.height * bounds.get('y')
-        self.width = allocation.width * bounds.get('width')
-        self.height = allocation.height * bounds.get('height')
+        self.label = preset.get('label')
+        self.x = allocation.x + allocation.width * preset.get('x')
+        self.y = allocation.y + allocation.height * preset.get('y')
+        self.width = allocation.width * preset.get('width')
+        self.height = allocation.height * preset.get('height')
 
-    def __init__(self, bounds: Gdk.Rectangle, allocation: Gdk.Rectangle):
+    def __init__(self, preset: 'ScaledPreset', allocation: Gdk.Rectangle):
         super().__init__()
-        self.x = allocation.x + allocation.width * bounds.x
-        self.y = allocation.y + allocation.height * bounds.y
-        self.width = allocation.width * bounds.width
-        self.height = allocation.height * bounds.height
+        self.label = preset.label
+        self.x = allocation.x + allocation.width * preset.x
+        self.y = allocation.y + allocation.height * preset.y
+        self.width = allocation.width * preset.width
+        self.height = allocation.height * preset.height
 
 
 class GtkStyleable:

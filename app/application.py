@@ -35,12 +35,12 @@ class Application(Gtk.Application):
         # get zone the cursor is located within
         cur_x, cur_y = mouse.Controller().position
         self.current_zone = self.zone_display.get_zone(cur_x, cur_y)
-        bounds = base.ScaledBounds(self.current_zone.bounds, self.workarea)
+        preset = base.ScaledPreset(self.current_zone.preset, self.workarea)
 
         # get active window and set geometry (size & position)
         active_window = self.screen.get_active_window()
         geometry_mask = (Wnck.WindowMoveResizeMask.X | Wnck.WindowMoveResizeMask.Y | Wnck.WindowMoveResizeMask.WIDTH | Wnck.WindowMoveResizeMask.HEIGHT)
-        active_window.set_geometry(Wnck.WindowGravity(0), geometry_mask, bounds.x, bounds.y, bounds.width, bounds.height)
+        active_window.set_geometry(Wnck.WindowGravity(0), geometry_mask, preset.x, preset.y, preset.width, preset.height)
 
     # Controller
     def key_press(self, key):
@@ -159,7 +159,7 @@ class Application(Gtk.Application):
         hotkey_listener.start()
 
         # create zone display and window container
-        default_preset = self.presets[self.settings.get('default_preset')]
+        default_preset = [base.ScaledPreset(preset, self.workarea) for preset in self.presets[self.settings.get('default_preset')]]
         self.zone_display = zones.ZoneDisplayWindow(default_preset)
 
         # create settings windows
