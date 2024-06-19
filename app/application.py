@@ -163,11 +163,6 @@ class Application(Gtk.Application):
 
         Gtk.ApplicationWindow(application=self)
 
-        from editor import ZoneEditorWindow
-
-        editor = ZoneEditorWindow(default_preset)
-        editor.show_all()
-
 
 if __name__ == "__main__":
     app = Application()

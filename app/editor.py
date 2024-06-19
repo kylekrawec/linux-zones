@@ -5,7 +5,7 @@ from gi.repository import Gtk, Gdk
 
 import base
 from base import Axis
-import zones
+from zones import ZoneEdge, ZoneContainer
 from display import get_workarea
 
 
@@ -14,17 +14,15 @@ class BoundPoint(Gtk.Button):
     A button that represents a draggable point bound to a ZoneEdge.
 
     Attributes:
-        dragging (bool): Indicates if the button is currently being dragged.
-        edge (zones.ZoneEdge): The ZoneEdge to which the point is bound.
+        edge (ZoneEdge): The ZoneEdge to which the point is bound.
     """
 
-    def __init__(self, edge: zones.ZoneEdge):
+    def __init__(self, edge: ZoneEdge):
         """
         Initializes the BoundPoint with a ZoneEdge.
         :param edge: The ZoneEdge to which the point is bound.
         """
         super().__init__()
-        self.dragging = False
         self.edge = edge
 
         # Connect Gtk signals to handlers
@@ -68,8 +66,7 @@ class ZoneEditorWindow(base.TransparentApplicationWindow):
         self.set_window_bounds(get_workarea())  # Set the window bounds to the work area
 
         self.__overlay = Gtk.Overlay()
-        # Create the ZoneContainer and add style classes
-        self.__container = zones.ZoneContainer(preset).add_zone_style_class('zone-pane', 'passive-zone')
+        self.__container = ZoneContainer(preset).add_zone_style_class('zone-pane', 'passive-zone')
         self.__editor = Gtk.Fixed()
 
         # Add primary widgets to the window
