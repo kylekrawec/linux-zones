@@ -1,2 +1,2 @@
 # Linux Zones
-A Fancy Zones equivalent window manager utility for Linux.
+A Fancy Zones equivalent window manager utility for Linux Gnome environments.
