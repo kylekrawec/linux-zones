@@ -131,7 +131,6 @@ class ZoneEditorWindow(base.TransparentApplicationWindow):
             point_offset = point.get_allocated_width() / 2  # Calculate the offset for the point
             x, y = point.edge.get_center()  # Get the center coordinates of the edge
             if point.edge.axis is Axis.x and -self.threshold < (event.x - x) < self.threshold:
-                # if self.focus_point is point or self.focus_point is None:
                 if point.is_visible() or self.focus_point is None:
                     point.show()
                     self.focus_point = point
