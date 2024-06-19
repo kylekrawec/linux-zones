@@ -11,7 +11,6 @@ import display
 import zones
 from base import State
 from config import Config
-from settings import Settings
 
 
 class Application(Gtk.Application):
@@ -35,7 +34,7 @@ class Application(Gtk.Application):
         # get zone the cursor is located within
         cur_x, cur_y = mouse.Controller().position
         self.current_zone = self.zone_display.get_zone(cur_x, cur_y)
-        preset = base.ScaledPreset(self.current_zone.preset, self.workarea)
+        preset = self.current_zone.preset
 
         # get active window and set geometry (size & position)
         active_window = self.screen.get_active_window()
@@ -85,7 +84,7 @@ class Application(Gtk.Application):
             case State.SET_ZONE:
                 for i, name in self.settings.zonemap.items():
                     if keyboard.KeyCode.from_char(i) == key:
-                        self.zone_display.set_preset(self.presets.get(name))
+                        self.zone_display.set_preset([base.Preset(preset) for preset in self.presets.get(name)])
                         self.zone_display.show_all()
 
     def __key_release_callback(self, key):
@@ -159,12 +158,15 @@ class Application(Gtk.Application):
         hotkey_listener.start()
 
         # create zone display and window container
-        default_preset = [base.ScaledPreset(preset, self.workarea) for preset in self.presets[self.settings.get('default_preset')]]
+        default_preset = [base.Preset(preset) for preset in self.presets[self.settings.get('default_preset')]]
         self.zone_display = zones.ZoneDisplayWindow(default_preset)
 
-        # create settings windows
-        self.settings_window = Settings(application=self)
-        self.settings_window.show_all()
+        Gtk.ApplicationWindow(application=self)
+
+        from editor import ZoneEditorWindow
+
+        editor = ZoneEditorWindow(default_preset)
+        editor.show_all()
 
 
 if __name__ == "__main__":
