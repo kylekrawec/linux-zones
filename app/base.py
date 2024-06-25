@@ -54,50 +54,18 @@ class Preset:
         self.width = preset.get('width')
         self.height = preset.get('height')
 
-        self.__scaled = False  # flag to track if preset has previously been scaled
-
-    def get_bounds(self) -> Gdk.Rectangle:
-        """
-        Gets the bounds of the preset as a Gdk.Rectangle object.
-        :return: A Gdk.Rectangle object representing the bounds of the preset.
-        """
-        bounds = Gdk.Rectangle()
-        bounds.x = self.x
-        bounds.y = self.y
-        bounds.width = self.width
-        bounds.height = self.height
-        return bounds
-
-    def is_scaled(self) -> bool:
-        """Determines if preset has been previously scaled."""
-        return self.__scaled
-
-    def scale(self, bounds: Gdk.Rectangle) -> None:
+    def scale(self, bounds: Gdk.Rectangle) -> Gdk.Rectangle:
         """
         Scales the preset dimensions based on the provided bounds.
         :param bounds: A Gdk.Rectangle providing the scaling reference.
+        :return: A Gdk.Rectangle object representing the scaled bounds of the preset.
         """
-        self.x = bounds.x + bounds.width * self.x
-        self.y = bounds.y + bounds.height * self.y
-        self.width = bounds.width * self.width
-        self.height = bounds.height * self.height
-        self.__scaled = True
-
-    def get_side_position(self, side: Side) -> LineString:
-        """
-        Returns the position of the specified side of the preset.
-        :param side: A Side enum value indicating which side's position to get.
-        :return: A LineString object representing the coordinates of the side.
-        """
-        match side:
-            case Side.TOP:
-                return LineString([(self.x, self.y), (self.x + self.width, self.y)])
-            case Side.BOTTOM:
-                return LineString([(self.x, self.y + self.height), (self.x + self.width, self.y + self.height)])
-            case Side.LEFT:
-                return LineString([(self.x, self.y), (self.x, self.y + self.height)])
-            case Side.RIGHT:
-                return LineString([(self.x + self.width, self.y), (self.x + self.width, self.y + self.height)])
+        new_bounds = Gdk.Rectangle()
+        new_bounds.x = bounds.x + bounds.width * self.x
+        new_bounds.y = bounds.y + bounds.height * self.y
+        new_bounds.width = bounds.width * self.width
+        new_bounds.height = bounds.height * self.height
+        return new_bounds
 
 
 class TransparentApplicationWindow(Gtk.ApplicationWindow):
