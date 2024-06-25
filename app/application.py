@@ -29,17 +29,18 @@ class Application(Gtk.Application):
         # configuration files
         self.settings = None
         self.presets = None
+        self.templates = None
 
     def set_window(self):
         # get zone the cursor is located within
         cur_x, cur_y = mouse.Controller().position
         self.current_zone = self.zone_display.get_zone(cur_x, cur_y)
-        preset = self.current_zone.preset
+        allocation = self.current_zone.get_allocation()
 
         # get active window and set geometry (size & position)
         active_window = self.screen.get_active_window()
         geometry_mask = (Wnck.WindowMoveResizeMask.X | Wnck.WindowMoveResizeMask.Y | Wnck.WindowMoveResizeMask.WIDTH | Wnck.WindowMoveResizeMask.HEIGHT)
-        active_window.set_geometry(Wnck.WindowGravity(0), geometry_mask, preset.x, preset.y, preset.width, preset.height)
+        active_window.set_geometry(Wnck.WindowGravity(0), geometry_mask, allocation.x, allocation.y, allocation.width, allocation.height)
 
     # Controller
     def key_press(self, key):
@@ -138,6 +139,7 @@ class Application(Gtk.Application):
         # load configuration
         self.settings = Config('settings.json').load()
         self.presets = Config('presets.json').load()
+        self.templates = Config('templates.json').load()
 
         # load css styles
         Config('style.css').load()
@@ -157,8 +159,17 @@ class Application(Gtk.Application):
         })
         hotkey_listener.start()
 
+        # extrat all presets
+        presets = {}
+        for name, preset in self.presets.items():
+            presets[name] = [base.Preset(bounds) for bounds in preset]
+
+        templates = {}
+        for name, preset in self.templates.items():
+            templates[name] = [base.Preset(bounds) for bounds in preset]
+
         # create zone display and window container
-        default_preset = [base.Preset(preset) for preset in self.presets[self.settings.get('default_preset')]]
+        default_preset = presets.get(self.settings.get('default_preset'))
         self.zone_display = zones.ZoneDisplayWindow(default_preset)
 
         Gtk.ApplicationWindow(application=self)
