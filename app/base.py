@@ -1,5 +1,4 @@
 import gi
-from shapely.geometry import LineString
 from enum import Enum
 
 gi.require_version('Gtk', '3.0')
@@ -84,14 +83,6 @@ class TransparentApplicationWindow(Gtk.ApplicationWindow):
 
         # Enable transparency
         self.set_app_paintable(True)
-
-    def set_window_bounds(self, bounds: Gdk.Rectangle) -> None:
-        """
-        Sets the position and size of the window based on the provided bounds.
-        :param bounds: A Gdk.Rectangle object representing the new position and size of the window.
-        """
-        self.move(bounds.x, bounds.y)
-        self.resize(bounds.width, bounds.height)
 
 
 # Mixin Classes

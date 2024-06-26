@@ -6,7 +6,6 @@ from gi.repository import Gtk, Gdk
 import base
 from base import Axis
 from zones import ZoneBoundary, ZoneContainer
-from display import get_workarea
 
 
 class BoundPoint(Gtk.Button):
@@ -60,7 +59,7 @@ class ZoneEditorWindow(base.TransparentApplicationWindow):
         :param preset: A list of Preset objects to initialize ZonePane objects.
         """
         super().__init__()
-        self.set_window_bounds(get_workarea())  # Set the window bounds to the work area
+        self.maximize()
 
         self.__threshold = 50  # Defines a threshold for boundary proximity detection
         self.__focus_point = None  # Tracks the currently focused point to limit only one point shown at a time

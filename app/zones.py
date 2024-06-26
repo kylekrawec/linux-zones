@@ -5,10 +5,9 @@ from shapely.geometry import LineString
 from shapely.ops import linemerge
 
 gi.require_version('Gtk', '3.0')
-from gi.repository import Gtk, Gdk, GObject
+from gi.repository import Gtk
 
 from base import Axis, Side, Preset, PresetableMixin, GtkStyleableMixin, TransparentApplicationWindow
-from display import get_workarea
 
 
 class ZonePane(PresetableMixin, GtkStyleableMixin, Gtk.Box):
@@ -172,7 +171,7 @@ class ZoneBoundary:
         if self.axis is Axis.y:
             for edge in self.__edges:
                 allocation = edge.zone.get_allocation()
-                if edge is Side.TOP:
+                if edge.side is Side.TOP:
                     # Adjust the height and y-position when moving the top edge
                     allocation.height = (allocation.y + allocation.height) - position
                     allocation.y = position
@@ -343,11 +342,12 @@ class ZoneDisplayWindow(TransparentApplicationWindow):
         :param preset: A list of Preset objects to initialize ZonePane objects.
         """
         super().__init__()
+        self.maximize()
+
         # Create the ZoneContainer and add style classes
         self.__container = ZoneContainer(preset).add_zone_style_class('zone-pane', 'passive-zone')
         self.__active_zone = None
         self.add(self.__container)  # Add the container to the window
-        self.set_window_bounds(get_workarea())  # Set the window bounds to the current workarea
 
     def get_zones(self) -> [ZonePane]:
         """
