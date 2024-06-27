@@ -71,17 +71,9 @@ class ZoneEditorWindow(TransparentApplicationWindow):
         self.__focus_point = None
         self.__edge_axis = Axis.y
         self.__overlay = Gtk.Overlay()
-        self.__container = ZoneContainer(preset)
+        self.__container = ZoneContainer(preset).add_zone_style_class('zone-pane', 'passive-zone')
         self.__editor = Gtk.Fixed()
         self.__edge_divider = Line(0, 0, 0, 0)
-
-        # Set up window for transparency
-        self.set_type_hint(Gdk.WindowTypeHint.DOCK)
-        screen = self.get_screen()
-        visual = screen.get_rgba_visual()
-        if visual and screen.is_composited():
-            self.set_visual(visual)
-        self.set_app_paintable(True)
 
         # Add Line to represent edge division
         self.__overlay.add_overlay(self.__edge_divider)
