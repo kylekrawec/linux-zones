@@ -6,11 +6,11 @@ from gi.repository import Gtk, GLib, Wnck
 import sys
 from pynput import keyboard, mouse
 
-import base
-import display
-import zones
-from base import State
+from base import State, Preset
+from zones import ZoneDisplayWindow
+from display import get_workarea
 from config import Config
+from settings import SettingsWindow
 
 
 class Application(Gtk.Application):
@@ -22,20 +22,37 @@ class Application(Gtk.Application):
         self.mouse_pressed = False
         self.current_zone = None
 
-        # app windows
-        self.zone_display = None
-        self.settings_window = None
-
         # configuration files
-        self.settings = None
-        self.presets = None
-        self.templates = None
+        self.settings = Config('settings.json').load()
+        self.presets = Config('presets.json').load()
+        self.templates = Config('templates.json').load()
+
+        # Extract all presets
+        presets = {}
+        for name, preset in self.presets.items():
+            presets[name] = [Preset(bounds) for bounds in preset]
+
+        templates = {}
+        for name, preset in self.templates.items():
+            templates[name] = [Preset(bounds) for bounds in preset]
+
+        # Create application windows
+        default_preset = presets.get(self.settings.get('default_preset'))
+        self.zone_display_window = ZoneDisplayWindow(default_preset)
+        self.settings_window = SettingsWindow()
+        self.settings_window.add_presets('Custom', presets)
+        self.settings_window.add_presets('Templates', templates)
 
     def set_window(self):
         # get zone the cursor is located within
         cur_x, cur_y = mouse.Controller().position
-        self.current_zone = self.zone_display.get_zone(cur_x, cur_y)
+        self.current_zone = self.zone_display_window.get_zone(cur_x, cur_y)
         allocation = self.current_zone.get_allocation()
+
+        # Translate window allocation to workarea
+        workarea = get_workarea()
+        allocation.x += workarea.x
+        allocation.y += workarea.y
 
         # get active window and set geometry (size & position)
         active_window = self.screen.get_active_window()
@@ -72,21 +89,16 @@ class Application(Gtk.Application):
         match self.state:
             case State.READY:
                 if key == keyboard.Key.cmd_l:
-                    # update workarea and set display dimentions if user modifies the workarea during runtime
-                    if display.get_workarea() != self.workarea:
-                        self.workarea = display.get_workarea()
-                        self.zone_display.set_window_bounds(self.workarea)
-
                     if self.mouse_pressed:
-                        self.zone_display.show_all()
+                        self.zone_display_window.show_all()
                         self.state = self.state.SET_WINDOW
                     else:
                         self.state = State.CTRL_READY
             case State.SET_ZONE:
                 for i, name in self.settings.zonemap.items():
                     if keyboard.KeyCode.from_char(i) == key:
-                        self.zone_display.set_preset([base.Preset(preset) for preset in self.presets.get(name)])
-                        self.zone_display.show_all()
+                        self.zone_display_window.set_preset([Preset(preset) for preset in self.presets.get(name)])
+                        self.zone_display_window.show_all()
 
     def __key_release_callback(self, key):
         match self.state:
@@ -94,10 +106,10 @@ class Application(Gtk.Application):
                 if key == keyboard.Key.ctrl_l or key == keyboard.Key.cmd_l or key == keyboard.Key.alt_l:
                     self.state = State.READY
                 else:
-                    self.zone_display.hide()
+                    self.zone_display_window.hide()
             case _:
                 if key == keyboard.Key.cmd_l:
-                    self.zone_display.hide()
+                    self.zone_display_window.hide()
                     self.state = State.READY
 
     def __mouse_click_callback(self, x, y, button, pressed):
@@ -105,21 +117,21 @@ class Application(Gtk.Application):
             self.mouse_pressed = pressed
             match self.state:
                 case State.CTRL_READY:
-                    self.zone_display.show_all()
+                    self.zone_display_window.show_all()
                     if pressed:
                         self.state = State.SET_WINDOW
                 case State.SET_WINDOW:
                     if not pressed:
                         self.set_window()
-                        self.zone_display.hide()
+                        self.zone_display_window.hide()
                         self.state = State.CTRL_READY
 
     def __mouse_move_callback(self, x, y):
         match self.state:
             case State.SET_WINDOW:
-                new_zone = self.zone_display.get_zone(x, y)
+                new_zone = self.zone_display_window.get_zone(x, y)
                 if new_zone != self.current_zone:
-                    self.zone_display.set_active(new_zone)
+                    self.zone_display_window.set_active(new_zone)
                     self.current_zone = new_zone
 
     def __on_activate_shortcut(self):
@@ -129,48 +141,27 @@ class Application(Gtk.Application):
     def do_startup(self):
         Gtk.Application.do_startup(self)
 
-        # get workarea
-        self.workarea = display.get_workarea()
-
         # get screen interaction object
         self.screen = Wnck.Screen.get_default()
         self.screen.force_update()
-
-        # load configuration
-        self.settings = Config('settings.json').load()
-        self.presets = Config('presets.json').load()
-        self.templates = Config('templates.json').load()
 
         # load css styles
         Config('style.css').load()
 
     def do_activate(self):
-        # start the keyboard listener in its own thread
+        # Start the keyboard listener in its own thread
         keyboard_listener = keyboard.Listener(on_press=self.key_press, on_release=self.key_release)
         keyboard_listener.start()
 
-        # start the mouse listener in its own thread
+        # Start the mouse listener in its own thread
         mouse_listener = mouse.Listener(on_click=self.mouse_click, on_move=self.mouse_move)
         mouse_listener.start()
 
-        # start the hotkey listener in its own thread
+        # Start the hotkey listener in its own thread
         hotkey_listener = keyboard.GlobalHotKeys({
             '<ctrl>+<cmd>+<alt>': self.on_activate_shortcut
         })
         hotkey_listener.start()
-
-        # extrat all presets
-        presets = {}
-        for name, preset in self.presets.items():
-            presets[name] = [base.Preset(bounds) for bounds in preset]
-
-        templates = {}
-        for name, preset in self.templates.items():
-            templates[name] = [base.Preset(bounds) for bounds in preset]
-
-        # create zone display and window container
-        default_preset = presets.get(self.settings.get('default_preset'))
-        self.zone_display = zones.ZoneDisplayWindow(default_preset)
 
         Gtk.ApplicationWindow(application=self)
 
