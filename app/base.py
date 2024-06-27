@@ -73,7 +73,7 @@ class TransparentApplicationWindow(Gtk.ApplicationWindow):
         super().__init__()
 
         # Set the window type hint to make it undecorated and generally ignored by the window manager
-        self.set_type_hint(Gdk.WindowTypeHint.DOCK)
+        self.set_type_hint(Gdk.WindowTypeHint.SPLASHSCREEN)
 
         # Set the window's visual so it supports transparency.
         screen = self.get_screen()
