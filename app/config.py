@@ -26,3 +26,10 @@ class Config(object):
                 Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
             )
             return css_provider
+
+    def save(self, data):
+        if self.filepath.endswith('.json'):
+            # Write dictionary to a JSON file
+            assert isinstance(data, dict), f'data must be a dictionary for json files.'
+            with open(self.filepath, 'w') as file:
+                json.dump(data, file, indent=4)
