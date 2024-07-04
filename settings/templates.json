@@ -1,23 +1,101 @@
 {
-  "columns": [
-    {"label": "1", "x": 0, "y": 0, "width": 0.33333, "height": 1},
-    {"label": "2", "x": 0.33333, "y": 0, "width": 0.33333, "height": 1},
-    {"label": "3", "x": 0.666666, "y": 0, "width": 0.33333, "height": 1}
-  ],
-  "rows": [
-    {"label": "1", "x": 0, "y": 0, "width": 1, "height": 0.33333},
-    {"label": "2", "x": 0, "y": 0.33333, "width": 1, "height": 0.33333},
-    {"label": "3", "x": 0, "y": 0.66666, "width": 1, "height": 0.33333}
-  ],
-  "grid": [
-    {"label": "1", "x": 0, "y": 0, "width": 0.5, "height": 0.5},
-    {"label": "2", "x": 0.5, "y": 0, "width": 0.5, "height": 0.5},
-    {"label": "3", "x": 0, "y": 0.5, "width": 0.5, "height": 0.5},
-    {"label": "4", "x": 0.5, "y": 0.5, "width": 0.5, "height": 0.5}
-  ],
-  "priority-grid": [
-    {"label": "1", "x": 0, "y": 0, "width": 0.25, "height": 1},
-    {"label": "2", "x": 0.25, "y": 0, "width": 0.5, "height": 1},
-    {"label": "3", "x": 0.75, "y": 0, "width": 0.25, "height": 1}
-  ]
+    "columns": [
+        {
+            "x": 0,
+            "y": 0,
+            "width": 0.33333,
+            "height": 1,
+            "id": "9624dc07eca1d3b9a9ee9f71225fff33"
+        },
+        {
+            "x": 0.33333,
+            "y": 0,
+            "width": 0.33333,
+            "height": 1,
+            "id": "3b150cbe7e922d2eeea22acaa7fb2f98"
+        },
+        {
+            "x": 0.666666,
+            "y": 0,
+            "width": 0.33333,
+            "height": 1,
+            "id": "3568917068a891b8b84bbb9285d869b7"
+        }
+    ],
+    "rows": [
+        {
+            "x": 0,
+            "y": 0,
+            "width": 1,
+            "height": 0.33333,
+            "id": "61ad94b383d30e52f566aae90e9f929f"
+        },
+        {
+            "x": 0,
+            "y": 0.33333,
+            "width": 1,
+            "height": 0.33333,
+            "id": "93472511ad132b35472c707383f63d32"
+        },
+        {
+            "x": 0,
+            "y": 0.66666,
+            "width": 1,
+            "height": 0.33333,
+            "id": "5b907719bcff150170c3a9cd9bc412e7"
+        }
+    ],
+    "grid": [
+        {
+            "x": 0,
+            "y": 0,
+            "width": 0.5,
+            "height": 0.5,
+            "id": "69c3f844ae701a2e94b21620fc31e195"
+        },
+        {
+            "x": 0.5,
+            "y": 0,
+            "width": 0.5,
+            "height": 0.5,
+            "id": "1a1dbaae5f58e30b74f5700272d13cea"
+        },
+        {
+            "x": 0,
+            "y": 0.5,
+            "width": 0.5,
+            "height": 0.5,
+            "id": "b9914191ba66949e3cca8b8298418f56"
+        },
+        {
+            "x": 0.5,
+            "y": 0.5,
+            "width": 0.5,
+            "height": 0.5,
+            "id": "ca1801b30a705f7325f80c7bf2769733"
+        }
+    ],
+    "priority-grid": [
+        {
+            "x": 0,
+            "y": 0,
+            "width": 0.25,
+            "height": 1,
+            "id": "81208f82033e235e838c8e8276909768"
+        },
+        {
+            "x": 0.25,
+            "y": 0,
+            "width": 0.5,
+            "height": 1,
+            "id": "869c3136bcd227d3c4b0b9f943cc327e"
+        },
+        {
+            "x": 0.75,
+            "y": 0,
+            "width": 0.25,
+            "height": 1,
+            "id": "e7d32de4ee07b2c0d09b4ac8f28f39ac"
+        }
+    ]
 }
