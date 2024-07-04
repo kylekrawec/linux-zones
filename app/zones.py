@@ -1,13 +1,14 @@
 import gi
-from itertools import groupby
-
+import networkx as nx
+from itertools import groupby, chain
 from shapely.geometry import LineString
 from shapely.ops import linemerge
 
 gi.require_version('Gtk', '3.0')
-from gi.repository import Gtk
+from gi.repository import Gtk, Gdk
 
-from base import Axis, Side, Preset, PresetableMixin, GtkStyleableMixin, TransparentApplicationWindow
+from base import Axis, Side, AbstractRectangleSide, Preset, Schema, TransparentApplicationWindow
+from base import PresetableMixin, GtkStyleableMixin
 
 
 class ZonePane(PresetableMixin, GtkStyleableMixin, Gtk.Box):
@@ -21,12 +22,8 @@ class ZonePane(PresetableMixin, GtkStyleableMixin, Gtk.Box):
         self.label = Gtk.Label()
         self.set_center_widget(self.label)
 
-        # If the preset has a label assign it
-        if self.preset.label:
-            self.label.set_text(self.preset.label)
 
-
-class ZoneEdge:
+class ZoneEdge(AbstractRectangleSide):
     """
     Represents a side of a ZonePane, allowing manipulation of its dimensions.
 
@@ -35,33 +32,25 @@ class ZoneEdge:
         side (Side): The specific side (TOP, BOTTOM, LEFT, RIGHT) of the ZonePane.
         axis (Axis): The axis (x or y) corresponding to the side.
     """
-
-    def __init__(self, zone: ZonePane, side: Side):
+    def __init__(self, zone: 'ZonePane', side: Side):
         """
         Initializes the ZoneEdge with a ZonePane and a specified side.
+
         :param zone: The ZonePane object associated with this side.
         :param side: The specific side (TOP, BOTTOM, LEFT, RIGHT) of the ZonePane.
         """
+        super().__init__(zone.preset, side)
         self.zone = zone  # The ZonePane object associated with this side
-        self.side = side  # The specific side of the ZonePane
         self.axis = Axis.x if side in {Side.LEFT, Side.RIGHT} else Axis.y  # Determine the axis based on the side
 
-    def get_position(self, normalized=False) -> LineString:
+    @property
+    def rectangle(self) -> Gdk.Rectangle:
         """
-        Gets the position of a ZonePanes side as a LineString.
-        :param normalized: Returns normalized position if True.
-        :return: A LineString representing the position of the side.
+        Retrieves the allocation rectangle of the ZonePane associated with this edge.
+
+        :return: A Gdk.Rectangle representing the allocation of the associated ZonePane.
         """
-        bounds = self.zone.preset if normalized else self.zone.get_allocation()
-        match self.side:
-            case Side.TOP:
-                return LineString([(bounds.x, bounds.y), (bounds.x + bounds.width, bounds.y)])
-            case Side.BOTTOM:
-                return LineString([(bounds.x, bounds.y + bounds.height), (bounds.x + bounds.width, bounds.y + bounds.height)])
-            case Side.LEFT:
-                return LineString([(bounds.x, bounds.y), (bounds.x, bounds.y + bounds.height)])
-            case Side.RIGHT:
-                return LineString([(bounds.x + bounds.width, bounds.y), (bounds.x + bounds.width, bounds.y + bounds.height)])
+        return self.zone.get_allocation()
 
 
 class ZoneBoundary:
@@ -88,7 +77,7 @@ class ZoneBoundary:
         :param edges: A list of ZoneEdge objects to check.
         :return: True if the sides form a valid edge, False otherwise.
         """
-        lines = [edge.get_position(normalized=True) for edge in edges]  # Get positions of the edges
+        lines = [edge.position for edge in edges]  # Get positions of the edges
         lines.sort(key=lambda line: line.bounds[0])  # Sort lines by their starting position on the axis
         axis_position = lines[0].coords[0][self.axis.value]  # Get the position on the axis
 
@@ -142,7 +131,7 @@ class ZoneBoundary:
         Gets the position of the ZoneBoundary as a LineString.
         :return: A LineString representing the position of the boundary.
         """
-        lines = [edges.get_position() for edges in self.__edges]  # Get positions of the edges
+        lines = [edge.position for edge in self.__edges]  # Get positions of the edges
         bounds = linemerge(lines).bounds  # Merge the lines and get the bounds
         return LineString([(bounds[0], bounds[1]), (bounds[2], bounds[3])])  # Create a LineString from the bounds
 
@@ -153,7 +142,7 @@ class ZoneBoundary:
         """
         if self.axis is Axis.x:
             for edge in self.__edges:
-                allocation = edge.zone.get_allocation()
+                allocation = edge.rectangle
                 if edge.side is Side.LEFT:
                     # Adjust the width and x-position when moving the left edge
                     allocation.width = (allocation.x + allocation.width) - position
@@ -170,7 +159,7 @@ class ZoneBoundary:
         """
         if self.axis is Axis.y:
             for edge in self.__edges:
-                allocation = edge.zone.get_allocation()
+                allocation = edge.rectangle
                 if edge.side is Side.TOP:
                     # Adjust the height and y-position when moving the top edge
                     allocation.height = (allocation.y + allocation.height) - position
@@ -181,108 +170,108 @@ class ZoneBoundary:
                 edge.zone.size_allocate(allocation)
 
 
-class ZonePanePositionGraph:
+class RectangleSideGraph:
     """
-    Represents a graph of ZonePane positions, grouping sides by axis and forming ZoneBoundary's.
+    A graph of rectangle edge relations.
+
+    This class represents a graph where nodes correspond to edges of rectangles defined by a Schema,
+    Preset, or ZonePane objects. It allows for reading and saving graph structures, generating
+    connections based on rectangle edges, and retrieving connected components.
+
+    Attributes:
+        __graph (nx.Graph): The underlying networkx Graph object storing rectangle edge relations.
     """
-    def __init__(self, zones: [ZonePane]):
+
+    def __init__(self, schemas: list[Schema] | list[Preset] | list[ZonePane]):
         """
-        Initializes the ZonePanePositionGraph with a list of ZonePane objects.
+        Initializes the RectangleSideGraph with a list of Schema, Preset, or ZonePane objects,
+        generating a graph of rectangle edge relations based on their properties.
 
-        This constructor processes the given zones to create a list of ZoneBoundary's by:
-        1. Filtering all x-axis and y-axis sides into separate lists.
-        2. Sorting and grouping the sides by their respective axes.
-        3. Removing sides that border the screen edges.
-        4. Creating ZoneBoundary's from the grouped sides.
-
-        :param zones: List of ZonePane objects to be processed.
+        :param schemas: A list containing Schema, Preset, or ZonePane objects representing rectangle definitions.
+        :raises TypeError: If schemas is not a list or does not contain objects of types Schema, Preset, or ZonePane.
         """
         super().__init__()
-        self.boundaries = []  # Initialize the list to store ZoneBoundary objects
+        self.__graph = nx.Graph()
+        assert len(schemas) > 0 and isinstance(schemas, list), 'Schema data must be a list containing one or more items.'
+        if all(isinstance(item, Schema) for item in schemas):
+            pass
+        elif all(isinstance(item, Preset) for item in schemas):
+            schemas = [Schema(item.id, item.__dict__) for item in schemas]
+        elif all(isinstance(item, ZonePane) for item in schemas):
+            schemas = [Schema(item.preset.id, item.preset.__dict__) for item in schemas]
+        else:
+            raise TypeError(f'Schema data must be a list of {Schema}, or {Preset}, or {ZonePane}.')
+        self.__generate(schemas)
 
-        # Filter all x-axis and y-axis sides into separate lists
-        x_sides, y_sides = [], []
-        for zone in zones:
-            x_sides.append(ZoneEdge(zone, Side.LEFT))
-            x_sides.append(ZoneEdge(zone, Side.RIGHT))
-            y_sides.append(ZoneEdge(zone, Side.TOP))
-            y_sides.append(ZoneEdge(zone, Side.BOTTOM))
-
-        # Order sides by axis and group matching values of the opposite axis after sorting
-        x_sides = self.__sort_and_group(x_sides, Axis.x)
-        y_sides = self.__sort_and_group(y_sides, Axis.y)
-
-        # Remove all sides that border the container edges
-        if len(x_sides) >= 2:
-            x_sides = x_sides[1:-1]  # Remove the left and right container edges from x_sides
-        if len(y_sides) >= 2:
-            y_sides = y_sides[1:-1]  # Remove the top and bottom container edges from y_sides
-
-        # Create ZoneBoundary's from the grouped sides
-        for group in x_sides:
-            boundaries = self.__get_zone_boundaries(group)
-            self.boundaries.extend(boundaries)
-
-        for group in y_sides:
-            boundaries = self.__get_zone_boundaries(group)
-            self.boundaries.extend(boundaries)
-
-    def __sort_and_group(self, edges: list[ZoneEdge], axis: Axis) -> list[list[ZoneEdge]]:
+    def read_file(self, filename: str) -> None:
         """
-        Sorts a list of ZoneEdge objects based on their positions along a given axis and then groups them.
+        Reads a graph structure from a file and initializes the internal __graph.
 
-        The method first sorts the edges based on the specified axis. If the axis is x, it sorts by the x-coordinate;
-        if the axis is y, it sorts by the y-coordinate. After sorting, it groups the edges by their position on the
-        opposite axis.
-
-        :param edges: List of ZoneEdge objects to be sorted and grouped.
-        :param axis: The axis (x or y) to use for sorting and grouping.
-        :return: A list of lists, where each sublist contains ZoneEdge objects grouped by their position
-                 on the opposite axis.
+        :param filename: The name of the file containing the graph structure.
         """
-        # Determine the opposite axis for sorting
-        op_axis = Axis.x.value if axis is Axis.x else Axis.y.value
+        self.__graph = nx.read_adjlist(filename)
 
-        # Sort edges by their positions along the opposite axis and the given axis
-        edges.sort(key=lambda edge: (
-            edge.get_position(normalized=True).bounds[op_axis],
-            edge.get_position(normalized=True).bounds[axis.value]
-        ))
-
-        # Group the sorted sides by their position along the opposite axis
-        grouped_edges = [list(g) for k, g in groupby(edges, key=lambda edge: edge.get_position(normalized=True).bounds[op_axis])]
-
-        return grouped_edges
-
-    def __get_zone_boundaries(self, edges: list[ZoneEdge]) -> list[ZoneBoundary]:
+    def save(self, filename: str) -> None:
         """
-        Processes a list of ZoneEdge objects to group contiguous sides into ZoneBoundary objects.
+        Saves the current graph structure to a file.
 
-        This method iterates through the list of sides, identifying groups of contiguous sides based on their positions.
-        It then creates ZoneBoundary objects for each group of contiguous sides and returns a list of these ZoneBoundary objects.
-
-        :param edges: List of ZoneEdge objects to be processed into ZoneBoundary objects.
-        :return: A list of ZoneBoundary objects, each representing a group of aligned contiguous ZoneEdges.
+        :param filename: The name of the file to save the graph structure.
         """
-        boundaries = []  # Initialize the list to store ZoneBoundary objects
-        contigous_group = [edges[0]]  # Start with the first side in the contiguous group
+        nx.write_adjlist(self.__graph, filename)
 
-        # Iterate through pairs of consecutive sides
-        for side1, side2 in zip(edges, edges[1:]):
-            line1, line2 = side1.get_position(normalized=True), side2.get_position(normalized=True)
-            # Check if the current side is contiguous with the next side
-            if line1.touches(line2) or line1.intersects(line2):
-                contigous_group.append(side2)  # Add to the current contiguous group
-            else:
-                # Split the group and start a new one since they aren't contiguous but do align
-                boundaries.append(ZoneBoundary(contigous_group))  # Create a ZoneBoundary for the current group
-                contigous_group = [side2]  # Start a new group with the next side
+    def get_connected_components(self):
+        """
+        Retrieves a list of connected components in the graph.
 
-        # Add the remaining sides as a ZoneBoundary if there are any left
-        if len(contigous_group) != 0:
-            boundaries.append(ZoneBoundary(contigous_group))
+        :return: A list of sets, where each set contains nodes belonging to the same connected component.
+        """
+        return list(nx.connected_components(self.__graph))
 
-        return boundaries  # Return the list of ZoneBoundary objects
+    def __generate(self, schemas: [Schema]):
+        """
+        Generates the graph by adding edges between adjacent rectangle sides based on their positions.
+
+        :param schemas: A list of Schema objects representing rectangles.
+        """
+        # Add all possible edges
+        x_nodes, y_nodes = [], []
+        for schema in schemas:
+            left, right = AbstractRectangleSide(schema, Side.LEFT), AbstractRectangleSide(schema, Side.RIGHT)
+            top, bottom = AbstractRectangleSide(schema, Side.TOP), AbstractRectangleSide(schema, Side.BOTTOM)
+            x_nodes.extend((left, right))
+            y_nodes.extend((top, bottom))
+            self.__graph.add_nodes_from((left, right, top, bottom))
+
+        # Sort nodes to simplify edge discovery
+        x_nodes.sort(key=lambda n: n.position.bounds[Axis.x.value])
+        y_nodes.sort(key=lambda n: n.position.bounds[Axis.y.value])
+
+        if len(x_nodes) > 2:
+            # Remove the nodes that border the left and right most positions
+            groups = [list(g) for k, g in groupby(x_nodes, key=lambda n: n.position.bounds[Axis.x.value])]
+            x_nodes = list(chain.from_iterable(groups[1:-1]))
+        if len(y_nodes) > 2:
+            # Remove the nodes that border the top and bottom most positions
+            groups = [list(g) for k, g in groupby(y_nodes, key=lambda n: n.position.bounds[Axis.y.value])]
+            y_nodes = list(chain.from_iterable(groups[1:-1]))
+
+        # Connect nodes to form graph based on side positions. Also forms connected components which represents boundaries.
+        self.__add_edges(x_nodes)
+        self.__add_edges(y_nodes)
+
+        # Find and remove isolated nodes(edges)
+        isolated_nodes = list(nx.isolates(self.__graph))
+        self.__graph.remove_nodes_from(isolated_nodes)
+
+    def __add_edges(self, nodes: [tuple[Schema, Side]]) -> None:
+        """
+        Adds edges between nodes representing adjacent rectangle sides if they touch or intersect.
+
+        :param nodes: A list of tuples containing Schema objects and their corresponding sides.
+        """
+        for u, v in zip(nodes, nodes[1:]):
+            if u.position.touches(v.position) or u.position.intersects(v.position):
+                self.__graph.add_edge(u, v)
 
 
 class ZoneContainer(Gtk.Fixed):
@@ -290,18 +279,20 @@ class ZoneContainer(Gtk.Fixed):
     A container that holds multiple ZonePane objects and manages their positions and styles.
 
     Attributes:
-        position_graph (ZonePanePositionGraph): Graph representing positions of ZonePane objects.
+        graph (RectangleSideGraph): Graph representing positions of zone sides within the container.
     """
 
-    def __init__(self, preset: [Preset]):
+    def __init__(self, presets: [Preset]):
         """
         Initializes the ZoneContainer with a list of Preset objects.
-        :param preset: A list of Preset objects to initialize ZonePane objects.
+        :param presets: A list of Preset objects to initialize ZonePane objects.
         """
         super().__init__()
-        for preset in preset:
-            self.add(ZonePane(preset))  # Add ZonePane objects to the container
-
+        self.graph = RectangleSideGraph(presets)
+        for i, preset in enumerate(presets):
+            zone = ZonePane(preset)
+            zone.label.set_label(str(i+1))
+            self.add(zone)  # Add ZonePane objects to the container
         self.connect('size-allocate', self.__on_size_allocate)
 
     def __on_size_allocate(self, widget, allocation) -> None:
@@ -312,9 +303,6 @@ class ZoneContainer(Gtk.Fixed):
         """
         for child in self.get_children():
             child.size_allocate(child.preset.scale(allocation))
-
-    def get_position_graph(self):
-        return ZonePanePositionGraph(self.get_children())
 
     def add_zone_style_class(self, *style_classes):
         """

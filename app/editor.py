@@ -5,7 +5,7 @@ from gi.repository import Gtk, Gdk
 
 from display import get_pointer_position
 from base import Axis, Preset, TransparentApplicationWindow
-from zones import ZoneBoundary, ZoneContainer
+from zones import ZoneBoundary, ZoneContainer, ZoneEdge
 from widgets import Line
 
 
@@ -58,10 +58,10 @@ class ZoneEditorWindow(TransparentApplicationWindow):
         __edge_axis (Axis): Tracks the current axis (Axis.x or Axis.y) for edge movement.
     """
 
-    def __init__(self, preset: [Preset]):
+    def __init__(self, presets: [Preset]):
         """
         Initializes the ZoneEditorWindow with a list of Preset objects.
-        :param preset: A list of Preset objects to initialize ZonePane objects.
+        :param presets: A list of Preset objects to initialize ZonePane objects.
         """
         super().__init__()
         self.maximize()
@@ -71,7 +71,7 @@ class ZoneEditorWindow(TransparentApplicationWindow):
         self.__focus_point = None
         self.__edge_axis = Axis.y
         self.__overlay = Gtk.Overlay()
-        self.__container = ZoneContainer(preset).add_zone_style_class('zone-pane', 'passive-zone')
+        self.__container = ZoneContainer(presets).add_zone_style_class('zone-pane', 'passive-zone')
         self.__editor = Gtk.Fixed()
         self.__edge_divider = Line(0, 0, 0, 0)
 
@@ -83,32 +83,47 @@ class ZoneEditorWindow(TransparentApplicationWindow):
         self.__overlay.add_overlay(self.__editor)
         self.add(self.__overlay)
 
-        # Layout boundary points based on zone boundary relations and position
-        for boundary in self.__container.get_position_graph().boundaries:
-            point = BoundPoint(boundary)
-            point.connect("motion-notify-event", self.__on_bound_point_motion)
-            self.__editor.add(point)
-
         # Connect Gtk signals to handlers
         self.add_events(Gdk.EventMask.POINTER_MOTION_MASK | Gdk.EventMask.KEY_PRESS_MASK | Gdk.EventMask.KEY_RELEASE_MASK)
-        self.__point_allocation_handler_id = self.connect('size-allocate', self.__on_point_size_allocate)
+        self.__point_allocation_handler_id = self.connect('size-allocate', self.__on_size_allocate)
         self.connect("motion-notify-event", self.__on_motion_move_bound_point)
         self.connect("motion-notify-event", self.__on_motion_move_edge)
         self.connect("key-press-event", self.__on_key_press)
         self.connect("key-release-event", self.__on_key_release)
 
-    def __on_point_size_allocate(self, widget, allocation) -> None:
+    def __on_size_allocate(self, widget, allocation) -> None:
         """
-        Handles the size-allocate signal to adjust the size of BoundPoint widgets.
+        Handles the size-allocate signal to create and size BoundPoint widgets.
+
         :param widget: The widget that received the signal.
         :param allocation: The allocation (Gtk.Allocation) containing the new size.
         """
         self.__threshold = min(allocation.width, allocation.height) * 0.05
         size = min(allocation.width, allocation.height) * 0.025
-        for point in self.__editor.get_children():
+        # Layout boundary points based on zone boundary relations and position
+        for boundary in self.__get_boundaries():
+            point = BoundPoint(boundary)
+            point.connect("motion-notify-event", self.__on_bound_point_motion)
             point.set_size_request(size, size)
             point.hide()
+            self.__editor.add(point)
         self.disconnect(self.__point_allocation_handler_id)
+
+    def __get_boundaries(self) -> [ZoneBoundary]:
+        """
+        Retrieves the boundaries of zones based on their connections in the container graph.
+
+        This method collects the ZoneBoundary objects by examining the connected components in the graph. Each component is
+        translated into a list of ZoneEdge objects, which are then used to create ZoneBoundary objects.
+
+        :return: A list of ZoneBoundary objects representing the boundaries of connected zones.
+        """
+        boundaries = []
+        zones = {zone.preset.id: zone for zone in self.__container.get_children()}
+        for component in self.__container.graph.get_connected_components():
+            edges = [ZoneEdge(zones[node.rectangle.id], node.side) for node in component]
+            boundaries.append(ZoneBoundary(edges))
+        return boundaries
 
     def __on_bound_point_motion(self, widget, event) -> None:
         """
