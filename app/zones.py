@@ -23,10 +23,13 @@ class ZonePane(PresetableMixin, GtkStyleableMixin, Gtk.Box):
         self.set_center_widget(self.label)
 
     def resize(self, allocation: Gdk.Rectangle) -> None:
-        self.preset.x = allocation.x / self.get_parent().get_allocated_width()
-        self.preset.y = allocation.y / self.get_parent().get_allocated_height()
-        self.preset.width = allocation.width / self.get_parent().get_allocated_width()
-        self.preset.height = allocation.height / self.get_parent().get_allocated_height()
+        parent = self.get_parent()
+        if parent is not None and isinstance(parent, Gtk.Widget):
+            x = allocation.x / parent.get_allocated_width()
+            y = allocation.y / parent.get_allocated_height()
+            width = allocation.width / parent.get_allocated_width()
+            height = allocation.height / parent.get_allocated_height()
+            self.preset.set_bounds((x, y, width, height))
         self.size_allocate(allocation)
 
 

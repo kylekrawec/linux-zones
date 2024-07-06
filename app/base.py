@@ -42,7 +42,7 @@ class Schema:
         height (float): Height of the schema bounds.
     """
 
-    def __init__(self, obj_id: str, bounds: Union[tuple, dict, Gdk.Rectangle, 'Schema']):
+    def __init__(self, obj_id: str, bounds: Union[tuple, dict, Gdk.Rectangle, 'Schema', 'Preset']):
         """
         Initializes a Schema rectangle object with the given ID and bounds.
 
@@ -59,7 +59,7 @@ class Schema:
         self.id = obj_id
         self.x, self.y, self.width, self.height = self._parse_bounds(bounds)
 
-    def _parse_bounds(self, bounds):
+    def _parse_bounds(self, bounds: Union[tuple, dict, Gdk.Rectangle, 'Schema', 'Preset']):
         """
         Parses and validates the bounds input to extract x, y, width, and height.
 
@@ -71,9 +71,7 @@ class Schema:
             return self.__parse_tuple(bounds)
         elif isinstance(bounds, dict):
             return self.__parse_dict(bounds)
-        elif isinstance(bounds, Gdk.Rectangle):
-            return bounds.x, bounds.y, bounds.width, bounds.height
-        elif isinstance(bounds, Schema):
+        elif isinstance(bounds, Gdk.Rectangle) or isinstance(bounds, Schema) or isinstance(bounds, Preset):
             return bounds.x, bounds.y, bounds.width, bounds.height
         else:
             raise TypeError("Bounds object must be a tuple, dict, Gdk.Rectangle, or Schema")
@@ -125,9 +123,25 @@ class Preset(Schema):
         :raises AssertionError: If any of the normalized bounds (x, y, width, height) are outside the range [0, 1].
         """
         Schema.__init__(self, preset.get('id'), preset)
-        bounds = (self.x, self.y, self.width, self.height)
+        self.__verify_bounds((self.x, self.y, self.width, self.height))
+        self.__truncate_preset(10)
+
+    def __verify_bounds(self, bounds: tuple):
         assert all(0 <= i <= 1 for i in bounds), \
             f'{self.__class__.__name__} requires normalized bounds between 0 and 1 (inclusive), instead got {bounds}.'
+
+    def __truncate_preset(self, digits):
+        multiplier = 10 ** digits
+        self.x = int(self.x * multiplier) / multiplier
+        self.y = int(self.y * multiplier) / multiplier
+        self.width = int(self.width * multiplier) / multiplier
+        self.height = int(self.height * multiplier) / multiplier
+
+    def set_bounds(self, bounds: Union[tuple, dict, Schema, 'Preset']):
+        bounds = self._parse_bounds(bounds)
+        self.__verify_bounds(bounds)
+        self.__truncate_preset(10)
+        self.x, self.y, self.width, self.height = bounds
 
     def scale(self, bounds: Gdk.Rectangle) -> Gdk.Rectangle:
         """
