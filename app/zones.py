@@ -22,6 +22,13 @@ class ZonePane(PresetableMixin, GtkStyleableMixin, Gtk.Box):
         self.label = Gtk.Label()
         self.set_center_widget(self.label)
 
+    def resize(self, allocation: Gdk.Rectangle) -> None:
+        self.preset.x = allocation.x / self.get_parent().get_allocated_width()
+        self.preset.y = allocation.y / self.get_parent().get_allocated_height()
+        self.preset.width = allocation.width / self.get_parent().get_allocated_width()
+        self.preset.height = allocation.height / self.get_parent().get_allocated_height()
+        self.size_allocate(allocation)
+
 
 class ZoneEdge(AbstractRectangleSide):
     """
@@ -150,7 +157,7 @@ class ZoneBoundary:
                 else:
                     # Adjust the width when moving the right edge
                     allocation.width = position - allocation.x
-                edge.zone.size_allocate(allocation)
+                edge.zone.resize(allocation)
 
     def move_vertical(self, position: int) -> None:
         """
@@ -167,7 +174,7 @@ class ZoneBoundary:
                 else:
                     # Adjust the height when moving the bottom edge
                     allocation.height = position - allocation.y
-                edge.zone.size_allocate(allocation)
+                edge.zone.resize(allocation)
 
 
 class RectangleSideGraph:
