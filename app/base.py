@@ -1,4 +1,6 @@
 import gi
+import hashlib
+import random
 from typing import Union
 from enum import Enum
 from shapely.geometry import LineString
@@ -42,64 +44,65 @@ class Schema:
         height (float): Height of the schema bounds.
     """
 
-    def __init__(self, obj_id: str, bounds: Union[tuple, dict, Gdk.Rectangle, 'Schema', 'Preset']):
+    def __init__(self, schema: Union[tuple, dict, Gdk.Rectangle, 'Schema', 'Preset']):
         """
-        Initializes a Schema rectangle object with the given ID and bounds.
+        Initializes a Schema rectangle object with the optional ID and mandatory schema data.
 
-        :param obj_id: Identifier for the schema object.
-        :param bounds: Bounds information for the schema object. Can be provided as a tuple, dictionary,
-            Gdk.Rectangle, or another Schema object.
-            - If tuple: Expects (x, y, width, height) where all elements are integers or floats.
-            - If dict: Expects {'x': x, 'y': y, 'width': width, 'height': height} with all values as integers or floats.
+        :param schema: Bound and optional ID information for the Schema object using any of the following formats:
+
+            Formats with Auto-generated ID
+            ------------------------------------------------------------------------------------------------------------
             - If Gdk.Rectangle: Directly takes x, y, width, and height attributes.
-            - If Schema: Copies x, y, width, and height from another Schema object.
+            - If tuple: Expects (x, y, width, height) where all items are integers or floats.
+            - If dict: Expects {'x': x, 'y': y, 'width': width, 'height': height} where all values are integers or floats.
 
-        :raises TypeError: If bounds object is not a tuple, dict, Gdk.Rectangle, or Schema.
-        """
-        self.id = obj_id
-        self.x, self.y, self.width, self.height = self._parse_bounds(bounds)
+            Formats with Given ID
+            ------------------------------------------------------------------------------------------------------------
+            - If tuple: Expects (id, x, y, width, height) where id is a string and all other items are integers or floats.
+            - If dict: Expects {'id': id, 'x': x, 'y': y, 'width': width, 'height': height} where 'id' is a string and
+              all other values are integers or floats.
+            - If Schema: Copies id, x, y, width, and height from Schema object.
+            - If Preset: Copies id, x, y, width, and height from Preset object.
 
-    def _parse_bounds(self, bounds: Union[tuple, dict, Gdk.Rectangle, 'Schema', 'Preset']):
+        :raises TypeError: If schema object is not a tuple, dict, Gdk.Rectangle, Schema, or Preset.
         """
-        Parses and validates the bounds input to extract x, y, width, and height.
+        self.id, self.x, self.y, self.width, self.height = self._parse_schema(schema)
 
-        :param bounds: Bounds information to parse and validate.
-        :return: Extracted x, y, width, and height as floats.
-        :raises TypeError: If bounds object is not a tuple, dict, Gdk.Rectangle, or Schema.
+        assert isinstance(self.id, str) and all(isinstance(item, (int, float)) for item in (self.x, self.y, self.width, self.height)), (
+            'Object data must represent (x, y, width, height) or (id, x, y, width, height) where id is a string and '
+            '(x, y, width, height) are integers and/or floats.')
+
+    def _parse_schema(self, schema: Union[tuple, dict, Gdk.Rectangle, 'Schema', 'Preset']) -> tuple:
         """
-        if isinstance(bounds, tuple):
-            return self.__parse_tuple(bounds)
-        elif isinstance(bounds, dict):
-            return self.__parse_dict(bounds)
-        elif isinstance(bounds, Gdk.Rectangle) or isinstance(bounds, Schema) or isinstance(bounds, Preset):
-            return bounds.x, bounds.y, bounds.width, bounds.height
+        Parses and validates the schema input to extract x, y, width, and height.
+
+        :param schema: Bounds and optional ID information to parse and validate.
+        :return: Generated or extracted id and extracted x, y, width, and height as integers and/or floats.
+        :raises TypeError: If schema object is not a tuple, dict, Gdk.Rectangle, Schema, or Preset.
+        """
+        if isinstance(schema, tuple):
+            if len(schema) == 4:
+                schema = (Schema.generate_id(), *schema)
+            return schema
+        elif isinstance(schema, dict):
+            if 'id' not in schema:
+                schema['id'] = Schema.generate_id()
+            return schema['id'], schema['x'], schema['y'], schema['width'], schema['height']
+        elif isinstance(schema, Gdk.Rectangle):
+            return Schema.generate_id(), schema.x, schema.y, schema.width, schema.height
+        elif isinstance(schema, (Schema, Preset)):
+            return schema.id, schema.x, schema.y, schema.width, schema.height
         else:
-            raise TypeError("Bounds object must be a tuple, dict, Gdk.Rectangle, or Schema")
+            raise TypeError("Object must be a tuple, dict, Gdk.Rectangle, Schema, or Preset object.")
 
-    def __parse_tuple(self, bounds):
+    @staticmethod
+    def generate_id() -> str:
         """
-        Parses a tuple bounds input.
+        Generates a unique ID using MD5 hash.
 
-        :param bounds: Tuple containing (x, y, width, height).
-        :return: Parsed x, y, width, and height as floats.
-        :raises AssertionError: If tuple length is not 4 or elements are not integers or floats.
+        :return: A unique string identifier.
         """
-        assert len(bounds) == 4 and all(isinstance(item, (int, float)) for item in bounds), (
-            'Tuple of bounds must contain integers and/or floats where (bounds[0], bounds[1], bounds[2], bounds[3]) '
-            'represent (x, y, width, height) respectively.')
-        return bounds
-
-    def __parse_dict(self, bounds):
-        """
-        Parses a dictionary bounds input.
-
-        :param bounds: Dictionary containing {'x': x, 'y': y, 'width': width, 'height': height}.
-        :return: Parsed x, y, width, and height as floats.
-        :raises AssertionError: If dictionary keys are missing or values are not integers or floats.
-        """
-        assert all(key in bounds and isinstance(bounds[key], (int, float)) for key in ['x', 'y', 'width', 'height']), \
-            'Dict of bounds must contain the required keys (x, y, width, height) where each value is an integer or float.'
-        return bounds['x'], bounds['y'], bounds['width'], bounds['height']
+        return hashlib.md5(random.randbytes(20)).hexdigest()
 
 
 class Preset(Schema):
@@ -107,22 +110,22 @@ class Preset(Schema):
     Represents a zone schema with normalized bounds between 0 and 1 inclusive.
 
     Attributes:
-        id (str): The identifier of the preset.
+        id (str): An optional identifier of the preset that auto-generates if omitted.
         x (float): The normalized x-coordinate of the preset within [0, 1].
         y (float): The normalized y-coordinate of the preset within [0, 1].
         width (float): The normalized width of the preset within [0, 1].
         height (float): The normalized height of the preset within [0, 1].
     """
 
-    def __init__(self, preset: dict):
+    def __init__(self, preset: Union[tuple, dict, 'Schema', 'Preset']):
         """
-        Initializes the Preset instance with values from the provided dictionary.
+        Initializes the Preset instance with values from the provided object.
 
-        :param preset: A dictionary containing the preset configuration in normalized bounds.
-                       Expected keys are 'id', 'x', 'y', 'width', and 'height'.
-        :raises AssertionError: If any of the normalized bounds (x, y, width, height) are outside the range [0, 1].
+        :param preset: An object containing the preset configuration in normalized bounds.
+                       Expected values are 'id', 'x', 'y', 'width', and 'height'.
+        :raises AssertionError: If any of the bounds (x, y, width, height) lie outside a normal range [0, 1].
         """
-        Schema.__init__(self, preset.get('id'), preset)
+        Schema.__init__(self, preset)
         self.__verify_bounds((self.x, self.y, self.width, self.height))
         self.__truncate_preset(10)
 
@@ -138,7 +141,8 @@ class Preset(Schema):
         self.height = int(self.height * multiplier) / multiplier
 
     def set_bounds(self, bounds: Union[tuple, dict, Schema, 'Preset']):
-        bounds = self._parse_bounds(bounds)
+        # Parse bounds and omit generated or existing id.
+        bounds = self._parse_schema(bounds)[1:]
         self.__verify_bounds(bounds)
         self.__truncate_preset(10)
         self.x, self.y, self.width, self.height = bounds
