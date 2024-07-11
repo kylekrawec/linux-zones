@@ -7,58 +7,76 @@ from shapely.ops import linemerge
 gi.require_version('Gtk', '3.0')
 from gi.repository import Gtk, Gdk
 
-from base import Axis, Side, AbstractRectangleSide, Preset, Schema, TransparentApplicationWindow
-from base import PresetableMixin, GtkStyleableMixin
+from display import get_workarea
+from base import Axis, Side, AbstractRectangleSide, Schema, TransparentApplicationWindow
+from base import GtkStyleableMixin, SchemableMixin
 
 
-class ZonePane(PresetableMixin, GtkStyleableMixin, Gtk.Box):
-    """A custom Gtk.Box that represets a basic zone area."""
-    def __init__(self, preset: Preset):
+class Zone(Gtk.Box, SchemableMixin, GtkStyleableMixin):
+    """
+    A custom Gtk.Box that represents a basic zone area.
+
+    This class combines functionalities of Gtk.Box, SchemableMixin, and GtkStyleableMixin
+    to represent a zone area with an associated schema and styling capabilities.
+
+    Attributes:
+        schema (Schema): The schema object containing the bounds and ID of the zone.
+        label (Gtk.Label): A label widget for displaying text within the zone.
+    """
+
+    def __init__(self, schema: Schema):
         """
-        :param preset: A Preset object containing configuration for the ZonePane.
+        Initializes the Zone with a given schema.
+
+        :param schema: The Schema object containing the bounds and ID for the zone.
         """
         Gtk.Box.__init__(self)
-        PresetableMixin.__init__(self, preset)
+        SchemableMixin.__init__(self, schema)
         self.label = Gtk.Label()
         self.set_center_widget(self.label)
 
     def resize(self, allocation: Gdk.Rectangle) -> None:
-        parent = self.get_parent()
-        if parent is not None and isinstance(parent, Gtk.Widget):
-            x = allocation.x / parent.get_allocated_width()
-            y = allocation.y / parent.get_allocated_height()
-            width = allocation.width / parent.get_allocated_width()
-            height = allocation.height / parent.get_allocated_height()
-            self.preset.set_bounds((x, y, width, height))
+        """
+        Resizes the zone based on a new allocation.
+
+        Updates the schema attributes (x, y, width, height) based on the new allocation
+        and then calls the size_allocate method to apply the changes to the Gtk.Box.
+
+        :param allocation: The Gdk.Rectangle object containing the new size and position.
+        """
+        self.schema.x = allocation.x
+        self.schema.y = allocation.y
+        self.schema.width = allocation.width
+        self.schema.height = allocation.height
         self.size_allocate(allocation)
 
 
 class ZoneEdge(AbstractRectangleSide):
     """
-    Represents a side of a ZonePane, allowing manipulation of its dimensions.
+    Represents a side of a Zone object, allowing manipulation of its dimensions.
 
     Attributes:
-        zone (ZonePane): The ZonePane object associated with this edge.
-        side (Side): The specific side (TOP, BOTTOM, LEFT, RIGHT) of the ZonePane.
+        zone (Zone): The Zone object associated with this edge.
+        side (Side): The specific side (TOP, BOTTOM, LEFT, RIGHT) of the Zone.
         axis (Axis): The axis (x or y) corresponding to the side.
     """
-    def __init__(self, zone: 'ZonePane', side: Side):
+    def __init__(self, zone: Zone, side: Side):
         """
-        Initializes the ZoneEdge with a ZonePane and a specified side.
+        Initializes the ZoneEdge with a Zone and a specified side.
 
-        :param zone: The ZonePane object associated with this side.
-        :param side: The specific side (TOP, BOTTOM, LEFT, RIGHT) of the ZonePane.
+        :param zone: The Zone object associated with this side.
+        :param side: The specific side (TOP, BOTTOM, LEFT, RIGHT) of the Zone.
         """
-        super().__init__(zone.preset, side)
-        self.zone = zone  # The ZonePane object associated with this side
+        super().__init__(zone.schema, side)
+        self.zone = zone  # The Zone object associated with this side
         self.axis = Axis.x if side in {Side.LEFT, Side.RIGHT} else Axis.y  # Determine the axis based on the side
 
     @property
     def rectangle(self) -> Gdk.Rectangle:
         """
-        Retrieves the allocation rectangle of the ZonePane associated with this edge.
+        Retrieves the allocation rectangle of the Zone associated with this edge.
 
-        :return: A Gdk.Rectangle representing the allocation of the associated ZonePane.
+        :return: A Gdk.Rectangle representing the allocation of the associated Zone.
         """
         return self.zone.get_allocation()
 
@@ -184,33 +202,26 @@ class RectangleSideGraph:
     """
     A graph of rectangle edge relations.
 
-    This class represents a graph where nodes correspond to edges of rectangles defined by a Schema,
-    Preset, or ZonePane objects. It allows for reading and saving graph structures, generating
-    connections based on rectangle edges, and retrieving connected components.
+    This class represents a graph where nodes correspond to edges of rectangles defined by a Schema objects. It allows
+    for reading and saving graph structures, generating connections based on rectangle edge positions, and retrieving
+    connected components.
 
     Attributes:
         __graph (nx.Graph): The underlying networkx Graph object storing rectangle edge relations.
     """
 
-    def __init__(self, schemas: list[Schema] | list[Preset] | list[ZonePane]):
+    def __init__(self, schemas: list[Schema]):
         """
-        Initializes the RectangleSideGraph with a list of Schema, Preset, or ZonePane objects,
-        generating a graph of rectangle edge relations based on their properties.
+        Initializes the RectangleSideGraph with a list of Schema objects generating a graph of rectangle edge relations
+        based on their properties.
 
-        :param schemas: A list containing Schema, Preset, or ZonePane objects representing rectangle definitions.
-        :raises TypeError: If schemas is not a list or does not contain objects of types Schema, Preset, or ZonePane.
+        :param schemas: A list containing Schema objects representing rectangle definitions.
+        :raises TypeError: If schemas is not a list or does not contain objects of types Schema.
         """
         super().__init__()
         self.__graph = nx.Graph()
         assert len(schemas) > 0 and isinstance(schemas, list), 'Schema data must be a list containing one or more items.'
-        if all(isinstance(item, Schema) for item in schemas):
-            pass
-        elif all(isinstance(item, Preset) for item in schemas):
-            schemas = [Schema(item.id, item.__dict__) for item in schemas]
-        elif all(isinstance(item, ZonePane) for item in schemas):
-            schemas = [Schema(item.preset.id, item.preset.__dict__) for item in schemas]
-        else:
-            raise TypeError(f'Schema data must be a list of {Schema}, or {Preset}, or {ZonePane}.')
+        assert all(isinstance(item, Schema) for item in schemas), f'Schema data must be a list of {Schema}.'
         self.__generate(schemas)
 
     def read_file(self, filename: str) -> None:
@@ -286,37 +297,58 @@ class RectangleSideGraph:
 
 class ZoneContainer(Gtk.Fixed):
     """
-    A container that holds multiple ZonePane objects and manages their positions and styles.
+    A container that holds multiple Zone objects and manages their positions and styles.
 
     Attributes:
         graph (RectangleSideGraph): Graph representing positions of zone sides within the container.
     """
 
-    def __init__(self, presets: [Preset]):
+    def __init__(self, schemas: list[dict]):
         """
-        Initializes the ZoneContainer with a list of Preset objects.
-        :param presets: A list of Preset objects to initialize ZonePane objects.
+        Initializes the ZoneContainer with a list of dicts representing schema data.
+        :param schemas: A list of dicts representing schema data to initialize Zone objects.
         """
         super().__init__()
-        self.graph = RectangleSideGraph(presets)
-        for i, preset in enumerate(presets):
-            zone = ZonePane(preset)
+        for i, schema in enumerate(schemas):
+            zone = Zone(Schema(schema))
             zone.label.set_label(str(i+1))
-            self.add(zone)  # Add ZonePane objects to the container
-        self.connect('size-allocate', self.__on_size_allocate)
+            self.add(zone)  # Add Zone objects to the container
 
-    def __on_size_allocate(self, widget, allocation) -> None:
+        self.graph = RectangleSideGraph([child.schema for child in self.get_children()])
+        self.initial_allocation_handler_id = self.connect('size-allocate', self.__on_initial_allocation)
+
+    def __on_initial_allocation(self, widget, allocation) -> None:
         """
-        Handles the size-allocate signal to scale and allocate sizes for child ZonePane objects.
+        Handles the size-allocate signal to scale and allocate sizes for child Zone objects. Disconnects after the
+        first allocation.
         :param widget: The widget that received the signal.
         :param allocation: The allocation (Gtk.Allocation) containing the new size.
         """
-        for child in self.get_children():
-            child.size_allocate(child.preset.scale(allocation))
+        for zone in self.get_children():
+            if zone.schema.is_normal:
+                zone.schema.scale(allocation.width, allocation.height)
+
+            # Translate zone position relative to container position
+            zone.schema.x += allocation.x
+            zone.schema.y += allocation.y
+
+            zone.size_allocate(zone.schema.rectangle)
+
+        self.connect('size-allocate', self.__on_size_allocate)
+        self.disconnect(self.initial_allocation_handler_id)
+
+    def __on_size_allocate(self, widget, allocation) -> None:
+        """
+        Handles the size-allocate signal to scale and allocate sizes for child Zone objects.
+        :param widget: The widget that received the signal.
+        :param allocation: The allocation (Gtk.Allocation) containing the new size.
+        """
+        for zone in self.get_children():
+            zone.size_allocate(zone.schema.rectangle)
 
     def add_zone_style_class(self, *style_classes):
         """
-        Adds style classes to all ZonePane children in the container.
+        Adds style classes to all children in the container.
         :param style_classes: One or more style class names to add.
         :return: The ZoneContainer object itself for chaining calls.
         """
@@ -327,39 +359,41 @@ class ZoneContainer(Gtk.Fixed):
 
 class ZoneDisplayWindow(TransparentApplicationWindow):
     """
-    A window that displays and manages multiple ZonePane objects within a ZoneContainer.
+    A window that displays and manages multiple Zone objects within a ZoneContainer.
 
     Attributes:
-        __container (ZoneContainer): The container holding ZonePane objects.
-        __active_zone (ZonePane): The currently active ZonePane object.
+        __container (ZoneContainer): The container holding Zone objects.
+        __active_zone (Zone): The currently active Zone object.
     """
 
-    def __init__(self, preset: [Preset]):
+    def __init__(self, schemas: list[dict]):
         """
-        Initializes the ZoneDisplayWindow with a list of Preset objects.
-        :param preset: A list of Preset objects to initialize ZonePane objects.
+        Initializes the ZoneDisplayWindow with a list of dicts representing schema data.
+        :param schemas: A list of dicts representing schema data to initialize Zone objects.
         """
         super().__init__()
         self.maximize()
+        workarea = get_workarea()
 
         # Create the ZoneContainer and add style classes
-        self.__container = ZoneContainer(preset).add_zone_style_class('zone-pane', 'passive-zone')
+        self.__container = ZoneContainer(schemas).add_zone_style_class('zone-pane', 'passive-zone')
+        self.__container.set_size_request(workarea.width, workarea.height)
         self.__active_zone = None
         self.add(self.__container)  # Add the container to the window
 
-    def get_zones(self) -> [ZonePane]:
+    def get_zones(self) -> [Zone]:
         """
-        Retrieves all ZonePane objects within the container.
-        :return: A list of ZonePane objects.
+        Retrieves all Zone objects within the container.
+        :return: A list of Zone objects.
         """
         return self.__container.get_children()
 
-    def get_zone(self, x, y) -> ZonePane:
+    def get_zone(self, x, y) -> Zone:
         """
-        Retrieves the ZonePane object at the specified coordinates.
+        Retrieves the Zone object at the specified coordinates.
         :param x: The x-coordinate.
         :param y: The y-coordinate.
-        :return: The ZonePane object at the specified coordinates.
+        :return: The Zone object at the specified coordinates.
         """
         # Verify the window has already been allocated.
         assert self.get_allocated_width() != 0 and self.get_allocated_height() != 0, \
@@ -370,10 +404,10 @@ class ZoneDisplayWindow(TransparentApplicationWindow):
             if allocation.x <= x < allocation.x + allocation.width and allocation.y <= y < allocation.y + allocation.height:
                 return zone
 
-    def set_active(self, zone: ZonePane) -> None:
+    def set_active(self, zone: Zone) -> None:
         """
-        Sets the specified ZonePane as the active zone.
-        :param zone: The ZonePane object to set as active.
+        Sets the specified Zone as the active zone.
+        :param zone: The Zone object to set as active.
         """
         assert zone in self.__container.get_children(), f"Zone must be a child of {self.__container.__class__.__name__}"
         if self.__active_zone:
@@ -382,12 +416,12 @@ class ZoneDisplayWindow(TransparentApplicationWindow):
         zone.remove_style_class('passive-zone').add_style_class('active-zone')  # Add the active style to the new active zone
         self.__active_zone = zone  # Update the active zone
 
-    def set_preset(self, preset: [Preset]) -> None:
+    def set_preset(self, schemas: [dict]) -> None:
         """
-        Sets a new list of Preset objects for the ZoneDisplayWindow.
-        :param preset: A new list of Preset objects.
+        Sets a new list of dicts representing schema data for the ZoneDisplayWindow.
+        :param schemas: A new list of dict objects.
         """
         self.remove(self.__container)  # Remove the current container
-        # Create a new container with the new preset and add style classes
-        self.__container = ZoneContainer(preset).add_zone_style_class('zone-pane', 'passive-zone')
+        # Create a new container with the new schema and add style classes
+        self.__container = ZoneContainer(schemas).add_zone_style_class('zone-pane', 'passive-zone')
         self.add(self.__container)  # Add the new container to the window

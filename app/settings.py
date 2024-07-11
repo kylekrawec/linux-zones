@@ -5,29 +5,29 @@ gi.require_version('Gtk', '3.0')
 from gi.repository import Gtk, Gdk
 
 import display
-from base import GtkStyleableMixin, Preset
+from base import GtkStyleableMixin
 from zones import ZoneContainer
 from editor import ZoneEditorWindow
 
 
-class PresetDisplay(GtkStyleableMixin, Gtk.Box):
-    def __init__(self, name: str, preset: [Preset]):
+class SchemaDisplay(GtkStyleableMixin, Gtk.Box):
+    def __init__(self, name: str, schema: [dict]):
         super().__init__()
         self.set_orientation(Gtk.Orientation.VERTICAL)
-        self.preset = preset
+        self.schema = schema
         size = display.get_workarea().height * 0.1
 
         header = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
         title = Gtk.Label(label=name)
         button = Gtk.Button(label="edit")
-        zone_container = ZoneContainer(preset).add_zone_style_class('preset-display-pane')
-        zone_container.set_size_request(size, size)
+        container = ZoneContainer(self.schema).add_zone_style_class('preset-display-pane')
+        container.set_size_request(size, size)
 
         header.pack_start(title, expand=False, fill=False, padding=0)
         header.pack_end(button, expand=False, fill=False, padding=0)
 
         self.add(header)
-        self.add(zone_container)
+        self.add(container)
 
         # Add css styles
         header.get_style_context().add_class('preset-display-box-header')
@@ -38,19 +38,19 @@ class PresetDisplay(GtkStyleableMixin, Gtk.Box):
         button.connect('button-press-event', self.__on_edit_button_click)
 
     def __on_edit_button_click(self, widget, event):
-        ZoneEditorWindow(self.preset).show_all()
+        ZoneEditorWindow(self.schema).show_all()
 
 
-class PresetDisplayLayout(Gtk.FlowBox):
-    def __init__(self, presets: dict[str, [Preset]]):
+class SchemaDisplayLayout(Gtk.FlowBox):
+    def __init__(self, schemas: dict[str, [dict]]):
         super().__init__()
         self.set_orientation(Gtk.Orientation.HORIZONTAL)
         self.set_selection_mode(Gtk.SelectionMode.NONE)
         self.set_homogeneous(True)
 
         # add each zones display variant to box
-        for name, preset in presets.items():
-            self.add(PresetDisplay(name, preset))
+        for name, schema in schemas.items():
+            self.add(SchemaDisplay(name, schema))
 
 
 class SettingsWindow(Gtk.ApplicationWindow, Gtk.ScrolledWindow):
@@ -80,9 +80,9 @@ class SettingsWindow(Gtk.ApplicationWindow, Gtk.ScrolledWindow):
         scrolled_window.add(self.layout)
         self.add(scrolled_window)
 
-    def add_presets(self, label: str, presets: dict[str, [Preset]]):
-        # stack widgets for template preset display
+    def add_schemas(self, label: str, schemas: dict[str, [dict]]):
+        # stack widgets for template schema display
         header = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
         header.pack_start(Gtk.Label(label=label), expand=False, fill=False, padding=12)
         self.layout.add(header)
-        self.layout.add(PresetDisplayLayout(presets))
+        self.layout.add(SchemaDisplayLayout(schemas))

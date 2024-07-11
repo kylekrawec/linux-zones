@@ -6,7 +6,7 @@ from gi.repository import Gtk, GLib, Wnck
 import sys
 from pynput import keyboard, mouse
 
-from base import State, Preset
+from base import State
 from zones import ZoneDisplayWindow
 from display import get_workarea
 from config import Config
@@ -22,26 +22,26 @@ class Application(Gtk.Application):
         self.mouse_pressed = False
         self.current_zone = None
 
-        # configuration files
-        self.settings = Config('settings.json').load()
-        self.presets = Config('presets.json').load()
-        self.templates = Config('templates.json').load()
+        # Declare Configs
+        self.settings_manager = Config('settings.json')
+        self.presets_manager = Config('presets.json')
+        self.templates_manager = Config('templates.json')
 
-        # Extract all presets
-        presets = {}
-        for name, preset in self.presets.items():
-            presets[name] = [Preset(bounds) for bounds in preset]
+        # Load settings
+        self.settings = self.settings_manager.load()
 
-        templates = {}
-        for name, preset in self.templates.items():
-            templates[name] = [Preset(bounds) for bounds in preset]
+        # Extract schemas
+        self.presets = self.presets_manager.load()
+        self.templates = self.templates_manager.load()
+
+        # Default settings
+        self.default_preset = self.presets.get(self.settings.get('default_preset'))
 
         # Create application windows
-        default_preset = presets.get(self.settings.get('default_preset'))
-        self.zone_display_window = ZoneDisplayWindow(default_preset)
+        self.zone_display_window = ZoneDisplayWindow(self.default_preset)
         self.settings_window = SettingsWindow()
-        self.settings_window.add_presets('Custom', presets)
-        self.settings_window.add_presets('Templates', templates)
+        self.settings_window.add_schemas('Custom', self.presets)
+        self.settings_window.add_schemas('Templates', self.templates)
 
     def set_window(self):
         # get zone the cursor is located within
@@ -95,9 +95,9 @@ class Application(Gtk.Application):
                     else:
                         self.state = State.CTRL_READY
             case State.SET_ZONE:
-                for i, name in self.settings.zonemap.items():
+                for i, name in self.settings['zonemap'].items():
                     if keyboard.KeyCode.from_char(i) == key:
-                        self.zone_display_window.set_preset([Preset(preset) for preset in self.presets.get(name)])
+                        self.zone_display_window.set_preset(self.presets.get(name, self.default_preset))
                         self.zone_display_window.show_all()
 
     def __key_release_callback(self, key):

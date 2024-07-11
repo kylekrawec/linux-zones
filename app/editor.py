@@ -3,8 +3,8 @@ import gi
 gi.require_version('Gtk', '3.0')
 from gi.repository import Gtk, Gdk
 
-from display import get_pointer_position
-from base import Axis, Preset, TransparentApplicationWindow
+from display import get_pointer_position, get_workarea
+from base import Axis, TransparentApplicationWindow
 from zones import ZoneBoundary, ZoneContainer, ZoneEdge
 from widgets import Line
 
@@ -49,7 +49,7 @@ class ZoneEditorWindow(TransparentApplicationWindow):
 
     Attributes:
         __overlay (Gtk.Overlay): The overlay widget for combining multiple widgets on top of one another.
-        __container (zones.ZoneContainer): A container holding ZonePane objects.
+        __container (zones.ZoneContainer): A container holding Zone objects.
         __editor (Gtk.Fixed): A fixed container holding BoundPoints.
         __edge_divider (Line): A line widget used for visualizing new edge positions before dividing.
         __point_allocation_handler_id (int): The ID for the size-allocate signal handler.
@@ -58,22 +58,26 @@ class ZoneEditorWindow(TransparentApplicationWindow):
         __edge_axis (Axis): Tracks the current axis (Axis.x or Axis.y) for edge movement.
     """
 
-    def __init__(self, presets: [Preset]):
+    def __init__(self, schemas: [dict]):
         """
-        Initializes the ZoneEditorWindow with a list of Preset objects.
-        :param presets: A list of Preset objects to initialize ZonePane objects.
+        Initializes the ZoneEditorWindow with a list of dicts representing schema data.
+        :param schemas: A list of dicts representing schema data to initialize Zone objects.
         """
         super().__init__()
         self.maximize()
+        workarea = get_workarea()
 
         # Initialize attributes
         self.__threshold = 50
         self.__focus_point = None
         self.__edge_axis = Axis.y
         self.__overlay = Gtk.Overlay()
-        self.__container = ZoneContainer(presets).add_zone_style_class('zone-pane', 'passive-zone')
+        self.__container = ZoneContainer(schemas).add_zone_style_class('zone-pane', 'passive-zone')
         self.__editor = Gtk.Fixed()
         self.__edge_divider = Line(0, 0, 0, 0)
+
+        # Set child size requests
+        self.__container.set_size_request(workarea.width, workarea.height)
 
         # Add Line to represent edge division
         self.__overlay.add_overlay(self.__edge_divider)
@@ -113,13 +117,13 @@ class ZoneEditorWindow(TransparentApplicationWindow):
         """
         Retrieves the boundaries of zones based on their connections in the container graph.
 
-        This method collects the ZoneBoundary objects by examining the connected components in the graph. Each component is
-        translated into a list of ZoneEdge objects, which are then used to create ZoneBoundary objects.
+        This method collects the ZoneBoundary objects by examining the connected components in the graph. Each component
+        is translated into a list of ZoneEdge objects, which are then used to create ZoneBoundary objects.
 
         :return: A list of ZoneBoundary objects representing the boundaries of connected zones.
         """
         boundaries = []
-        zones = {zone.preset.id: zone for zone in self.__container.get_children()}
+        zones = {zone.schema.id: zone for zone in self.__container.get_children()}
         for component in self.__container.graph.get_connected_components():
             edges = [ZoneEdge(zones[node.rectangle.id], node.side) for node in component]
             boundaries.append(ZoneBoundary(edges))

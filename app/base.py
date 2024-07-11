@@ -9,6 +9,8 @@ from abc import ABC
 gi.require_version('Gtk', '3.0')
 from gi.repository import Gtk, Gdk
 
+from exceptions import NormalizationFailureException, ScalingFailureException
+
 
 class State(Enum):
     """Represents the various states in which an application or system can be."""
@@ -34,132 +36,124 @@ class Side(Enum):
 
 class Schema:
     """
-    Represents a schema object with ID and bounds attributes.
+    Represents a rectangular schema with normalized or pixel-based coordinates.
 
-    Attributes:
-        id (str): Identifier for the schema object.
-        x (float): X-coordinate of the schema bounds.
-        y (float): Y-coordinate of the schema bounds.
-        width (float): Width of the schema bounds.
-        height (float): Height of the schema bounds.
+    This class can be initialized with either a dictionary or a Gdk.Rectangle object.
+    It supports operations for scaling between normalized (0-1) and pixel-based coordinates.
+
+    :ivar x: X-coordinate of the top-left corner
+    :ivar y: Y-coordinate of the top-left corner
+    :ivar width: Width of the rectangle
+    :ivar height: Height of the rectangle
+    :ivar id: Unique identifier for the schema
+    :ivar is_normal: Indicates if the coordinates are normalized (0-1)
     """
 
-    def __init__(self, schema: Union[tuple, dict, Gdk.Rectangle, 'Schema', 'Preset']):
+    def __init__(self, data: Union[dict, Gdk.Rectangle]):
         """
-        Initializes a Schema rectangle object with the optional ID and mandatory schema data.
+        Initialize a Schema object.
 
-        :param schema: Bound and optional ID information for the Schema object using any of the following formats:
-
-            Formats with Auto-generated ID
-            ------------------------------------------------------------------------------------------------------------
-            - If Gdk.Rectangle: Directly takes x, y, width, and height attributes.
-            - If tuple: Expects (x, y, width, height) where all items are integers or floats.
-            - If dict: Expects {'x': x, 'y': y, 'width': width, 'height': height} where all values are integers or floats.
-
-            Formats with Given ID
-            ------------------------------------------------------------------------------------------------------------
-            - If tuple: Expects (id, x, y, width, height) where id is a string and all other items are integers or floats.
-            - If dict: Expects {'id': id, 'x': x, 'y': y, 'width': width, 'height': height} where 'id' is a string and
-              all other values are integers or floats.
-            - If Schema: Copies id, x, y, width, and height from Schema object.
-            - If Preset: Copies id, x, y, width, and height from Preset object.
-
-        :raises TypeError: If schema object is not a tuple, dict, Gdk.Rectangle, Schema, or Preset.
+        :param data: Input data for schema initialization.
+        :raises TypeError: If data is neither a dict nor a Gdk.Rectangle.
         """
-        self.id, self.x, self.y, self.width, self.height = self._parse_schema(schema)
-
-        assert isinstance(self.id, str) and all(isinstance(item, (int, float)) for item in (self.x, self.y, self.width, self.height)), (
-            'Object data must represent (x, y, width, height) or (id, x, y, width, height) where id is a string and '
-            '(x, y, width, height) are integers and/or floats.')
-
-    def _parse_schema(self, schema: Union[tuple, dict, Gdk.Rectangle, 'Schema', 'Preset']) -> tuple:
-        """
-        Parses and validates the schema input to extract x, y, width, and height.
-
-        :param schema: Bounds and optional ID information to parse and validate.
-        :return: Generated or extracted id and extracted x, y, width, and height as integers and/or floats.
-        :raises TypeError: If schema object is not a tuple, dict, Gdk.Rectangle, Schema, or Preset.
-        """
-        if isinstance(schema, tuple):
-            if len(schema) == 4:
-                schema = (Schema.generate_id(), *schema)
-            return schema
-        elif isinstance(schema, dict):
-            if 'id' not in schema:
-                schema['id'] = Schema.generate_id()
-            return schema['id'], schema['x'], schema['y'], schema['width'], schema['height']
-        elif isinstance(schema, Gdk.Rectangle):
-            return Schema.generate_id(), schema.x, schema.y, schema.width, schema.height
-        elif isinstance(schema, (Schema, Preset)):
-            return schema.id, schema.x, schema.y, schema.width, schema.height
+        if isinstance(data, Gdk.Rectangle):
+            # Initialize from Gdk.Rectangle
+            self.x = data.x
+            self.y = data.y
+            self.width = data.width
+            self.height = data.height
+            self.id = self.generate_id()
+        elif isinstance(data, dict):
+            # Initialize from dictionary
+            self.x = data['x']
+            self.y = data['y']
+            self.width = data['width']
+            self.height = data['height']
+            self.id = data.get('id', self.generate_id())
         else:
-            raise TypeError("Object must be a tuple, dict, Gdk.Rectangle, Schema, or Preset object.")
+            raise TypeError("data must be either a dict or Gdk.Rectangle")
+
+        # Check if coordinates are normalized
+        self.is_normal = all(0 <= i <= 1 for i in [self.x, self.y, self.width, self.height])
+
+    @property
+    def rectangle(self) -> Gdk.Rectangle:
+        """
+        Convert the schema to a Gdk.Rectangle.
+
+        :return: A Gdk.Rectangle representation of the schema.
+        """
+        r = Gdk.Rectangle()
+        r.x = self.x
+        r.y = self.y
+        r.width = self.width
+        r.height = self.height
+        return r
+
+    def scale(self, width: int, height: int) -> None:
+        """
+        Scale the schema from normalized coordinates to pixel coordinates.
+
+        :param width: The width to scale to.
+        :param height: The height to scale to.
+        :raises AssertionError: If the schema is not in normalized coordinates.
+        :raises ScalingFailureException: If scaling results in non-normal coordinates.
+        """
+        assert self.is_normal, 'Cannot scale non-normalized bounds.'
+        self.x = round(self.x * width)
+        self.y = round(self.y * height)
+        self.width = round(self.width * width)
+        self.height = round(self.height * height)
+
+        self.is_normal = all(0 <= i <= 1 for i in [self.x, self.y, self.width, self.height])
+        if self.is_normal:
+            raise ScalingFailureException(f'{self.__class__} failed to be scaled. Ensure width and height values are greater then one.')
+
+    def normalize(self, width: int, height: int) -> None:
+        """
+        Normalize the schema from pixel coordinates to 0-1 range.
+
+        :param width: The width to normalize against.
+        :param height: The height to normalize against.
+        :raises AssertionError: If the schema is already normalized or if width/height are invalid.
+        :raises NormalizationFailureException: If normalization results in out-of-range values.
+        """
+        assert not self.is_normal, 'Cannot normalize normal bounds.'
+        assert width > 0 and height > 0, 'Width and height must be greater than zero.'
+
+        self.x = self.x / width
+        self.y = self.y / height
+        self.width = self.width / width
+        self.height = self.height / height
+
+        self.is_normal = all(0 <= i <= 1 for i in [self.x, self.y, self.width, self.height])
+        if not self.is_normal:
+            raise NormalizationFailureException(f'{self.__class__} failed to be normalized. Ensure width and height values are greater then schema width and height.')
 
     @staticmethod
     def generate_id() -> str:
         """
-        Generates a unique ID using MD5 hash.
+        Generate a unique ID using MD5 hash.
 
         :return: A unique string identifier.
         """
         return hashlib.md5(random.randbytes(20)).hexdigest()
 
-
-class Preset(Schema):
-    """
-    Represents a zone schema with normalized bounds between 0 and 1 inclusive.
-
-    Attributes:
-        id (str): An optional identifier of the preset that auto-generates if omitted.
-        x (float): The normalized x-coordinate of the preset within [0, 1].
-        y (float): The normalized y-coordinate of the preset within [0, 1].
-        width (float): The normalized width of the preset within [0, 1].
-        height (float): The normalized height of the preset within [0, 1].
-    """
-
-    def __init__(self, preset: Union[tuple, dict, 'Schema', 'Preset']):
+    def __str__(self) -> str:
         """
-        Initializes the Preset instance with values from the provided object.
+        Return a string representation of the Schema.
 
-        :param preset: An object containing the preset configuration in normalized bounds.
-                       Expected values are 'id', 'x', 'y', 'width', and 'height'.
-        :raises AssertionError: If any of the bounds (x, y, width, height) lie outside a normal range [0, 1].
+        :return: A string describing the Schema object.
         """
-        Schema.__init__(self, preset)
-        self.__verify_bounds((self.x, self.y, self.width, self.height))
-        self.__truncate_preset(10)
+        return f"Schema(id={self.id}, x={self.x}, y={self.y}, width={self.width}, height={self.height})"
 
-    def __verify_bounds(self, bounds: tuple):
-        assert all(0 <= i <= 1 for i in bounds), \
-            f'{self.__class__.__name__} requires normalized bounds between 0 and 1 (inclusive), instead got {bounds}.'
-
-    def __truncate_preset(self, digits):
-        multiplier = 10 ** digits
-        self.x = int(self.x * multiplier) / multiplier
-        self.y = int(self.y * multiplier) / multiplier
-        self.width = int(self.width * multiplier) / multiplier
-        self.height = int(self.height * multiplier) / multiplier
-
-    def set_bounds(self, bounds: Union[tuple, dict, Schema, 'Preset']):
-        # Parse bounds and omit generated or existing id.
-        bounds = self._parse_schema(bounds)[1:]
-        self.__verify_bounds(bounds)
-        self.__truncate_preset(10)
-        self.x, self.y, self.width, self.height = bounds
-
-    def scale(self, bounds: Gdk.Rectangle) -> Gdk.Rectangle:
+    def __dict__(self) -> dict:
         """
-        Scales the preset dimensions based on the provided bounds.
+        Return a dictionary representation of the Schema.
 
-        :param bounds: A Gdk.Rectangle providing the scaling reference.
-        :return: A Gdk.Rectangle object representing the scaled bounds of the preset.
+        :return: A dictionary containing the Schema's attributes.
         """
-        new_bounds = Gdk.Rectangle()
-        new_bounds.x = bounds.x + bounds.width * self.x
-        new_bounds.y = bounds.y + bounds.height * self.y
-        new_bounds.width = bounds.width * self.width
-        new_bounds.height = bounds.height * self.height
-        return new_bounds
+        return {'id': self.id, 'x': self.x, 'y': self.y, 'width': self.width, 'height': self.height}
 
 
 class TransparentApplicationWindow(Gtk.ApplicationWindow):
@@ -180,10 +174,10 @@ class TransparentApplicationWindow(Gtk.ApplicationWindow):
         self.set_app_paintable(True)
 
 
-class PresetableMixin:
-    """Applies Preset requirements to its subclass."""
-    def __init__(self, preset: Preset):
-        self.preset = preset
+class SchemableMixin:
+    """Applies Schema requirements to its subclass."""
+    def __init__(self, schema: Schema):
+        self.schema = schema
         if not issubclass(type(self), Gtk.Widget):
             raise TypeError(f"{self.__class__} requires inheritance from Gtk.Widget")
 
