@@ -3,6 +3,8 @@ import gi
 gi.require_version('Gtk', '3.0')
 from gi.repository import Gtk, GObject
 
+from base import Axis
+
 
 class Line(Gtk.DrawingArea):
     """Custom Gtk widget representing a straight line drawn using Cairo."""
@@ -13,12 +15,15 @@ class Line(Gtk.DrawingArea):
         """
         Initializes a Line widget with specified coordinates.
 
+        axis: The Axis of the line. Axis.x if horizontal, Axis.y if vertical.
         :param x1: X-coordinate of the starting point.
         :param y1: Y-coordinate of the starting point.
         :param x2: X-coordinate of the ending point.
         :param y2: Y-coordinate of the ending point.
         """
         super().__init__()
+        assert x1 == x2 or y1 == y2, 'Line is constrained to be a horizontal or vertical straight line.'
+        self.axis = Axis.y if x1 == x2 else Axis.x
         self.x1 = x1
         self.y1 = y1
         self.x2 = x2
@@ -42,11 +47,14 @@ class Line(Gtk.DrawingArea):
         """
         Sets new coordinates for the line and queues a redraw.
 
+        axis: The Axis of the line. Axis.x if horizontal, Axis.y if vertical.
         :param x1: New X-coordinate of the starting point.
         :param y1: New Y-coordinate of the starting point.
         :param x2: New X-coordinate of the ending point.
         :param y2: New Y-coordinate of the ending point.
         """
+        assert x1 == x2 or y1 == y2, 'Line is constrained to be a horizontal or vertical straight line.'
+        self.axis = Axis.y if x1 == x2 else Axis.x
         self.x1 = x1
         self.y1 = y1
         self.x2 = x2

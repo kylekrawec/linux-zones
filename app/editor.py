@@ -1,11 +1,11 @@
 import gi
 
 gi.require_version('Gtk', '3.0')
-from gi.repository import Gtk, Gdk
+from gi.repository import Gtk, Gdk, GLib
 
 from display import get_pointer_position, get_workarea
 from base import Axis, TransparentApplicationWindow
-from zones import ZoneBoundary, ZoneContainer, ZoneEdge
+from zones import ZoneBoundary, ZoneContainer, ZoneEdge, RectangleSideGraph
 from widgets import Line
 
 
@@ -48,14 +48,13 @@ class ZoneEditorWindow(TransparentApplicationWindow):
     A window for editing and configuring zones using BoundPoint widgets.
 
     Attributes:
+        __threshold (int): Threshold for detecting proximity to boundaries.
+        __focus_point (BoundPoint or None): The currently focused BoundPoint, ensuring only one point is active.
+        __edge_axis (Axis): The current axis (Axis.x or Axis.y) for edge movement.
+        __edge_divider (Line): A line widget to visualize new edge positions before dividing.
         __overlay (Gtk.Overlay): The overlay widget for combining multiple widgets on top of one another.
-        __container (zones.ZoneContainer): A container holding Zone objects.
         __editor (Gtk.Fixed): A fixed container holding BoundPoints.
-        __edge_divider (Line): A line widget used for visualizing new edge positions before dividing.
-        __point_allocation_handler_id (int): The ID for the size-allocate signal handler.
-        __threshold (int): Defines a threshold for boundary proximity detection.
-        __focus_point (BoundPoint or None): Tracks the currently focused point to limit only one point shown at a time.
-        __edge_axis (Axis): Tracks the current axis (Axis.x or Axis.y) for edge movement.
+        __container (zones.ZoneContainer): A container holding Zone objects.
     """
 
     def __init__(self, schemas: [dict]):
@@ -71,13 +70,16 @@ class ZoneEditorWindow(TransparentApplicationWindow):
         self.__threshold = 50
         self.__focus_point = None
         self.__edge_axis = Axis.y
-        self.__overlay = Gtk.Overlay()
-        self.__container = ZoneContainer(schemas).add_zone_style_class('zone-pane', 'passive-zone')
-        self.__editor = Gtk.Fixed()
         self.__edge_divider = Line(0, 0, 0, 0)
+        self.__overlay = Gtk.Overlay()
+        self.__editor = Gtk.Fixed()
+        self.__container = ZoneContainer(schemas)
 
         # Set child size requests
         self.__container.set_size_request(workarea.width, workarea.height)
+
+        # Add CSS classes
+        self.__container.add_zone_style_class('zone-pane', 'passive-zone')
 
         # Add Line to represent edge division
         self.__overlay.add_overlay(self.__edge_divider)
@@ -88,46 +90,70 @@ class ZoneEditorWindow(TransparentApplicationWindow):
         self.add(self.__overlay)
 
         # Connect Gtk signals to handlers
-        self.add_events(Gdk.EventMask.POINTER_MOTION_MASK | Gdk.EventMask.KEY_PRESS_MASK | Gdk.EventMask.KEY_RELEASE_MASK)
-        self.__point_allocation_handler_id = self.connect('size-allocate', self.__on_size_allocate)
-        self.connect("motion-notify-event", self.__on_motion_move_bound_point)
-        self.connect("motion-notify-event", self.__on_motion_move_edge)
-        self.connect("key-press-event", self.__on_key_press)
-        self.connect("key-release-event", self.__on_key_release)
+        self.add_events(
+            Gdk.EventMask.POINTER_MOTION_MASK |
+            Gdk.EventMask.KEY_PRESS_MASK |
+            Gdk.EventMask.KEY_RELEASE_MASK |
+            Gdk.EventMask.BUTTON_PRESS_MASK
+        )
 
-    def __on_size_allocate(self, widget, allocation) -> None:
+        # Connect signals to handlers
+        self.__container.connect('size-allocate', self.__on_container_allocation)
+        self.connect('motion-notify-event', self.__on_motion_move_bound_point)
+        self.connect('motion-notify-event', self.__on_motion_move_edge)
+        self.connect('key-press-event', self.__on_key_press)
+        self.connect('key-release-event', self.__on_key_release)
+        self.connect('button-press-event', self.__on_button_press)
+
+    def __on_container_allocation(self, container: ZoneContainer, allocation: Gdk.Rectangle) -> None:
         """
-        Handles the size-allocate signal to create and size BoundPoint widgets.
+        Handles the container's size-allocate signal to adjust the BoundPoints.
 
-        :param widget: The widget that received the signal.
-        :param allocation: The allocation (Gtk.Allocation) containing the new size.
+        This method recalculates the threshold and point sizes based on the new allocation,
+        removes existing BoundPoints, and adds new ones based on the updated container layout.
+
+        :param container: The container that received the size-allocate signal.
+        :param allocation: The new allocation containing the updated size information.
         """
-        self.__threshold = min(allocation.width, allocation.height) * 0.05
-        size = min(allocation.width, allocation.height) * 0.025
-        # Layout boundary points based on zone boundary relations and position
-        for boundary in self.__get_boundaries():
-            point = BoundPoint(boundary)
-            point.connect("motion-notify-event", self.__on_bound_point_motion)
-            point.set_size_request(size, size)
-            point.hide()
-            self.__editor.add(point)
-        self.disconnect(self.__point_allocation_handler_id)
+        # Update threshold and point size based on new allocation
+        self.__threshold = round(min(allocation.width, allocation.height) * 0.04)
+        self.__point_size = round(min(allocation.width, allocation.height) * 0.03)
+        self.__point_offset = self.__point_size / 2
 
-    def __get_boundaries(self) -> [ZoneBoundary]:
+        # Remove existing BoundPoints
+        for child in self.__editor.get_children():
+            if isinstance(child, BoundPoint):
+                self.__editor.remove(child)
+
+        # Create new graph and add boundary points
+        schemas = [zone.schema for zone in container.get_children()]
+        graph = RectangleSideGraph(schemas)
+        self.__add_boundary_points(graph)
+
+    def __add_boundary_points(self, graph: RectangleSideGraph) -> None:
         """
-        Retrieves the boundaries of zones based on their connections in the container graph.
+        Layouts boundary points based on zone boundary relations and positions.
 
-        This method collects the ZoneBoundary objects by examining the connected components in the graph. Each component
-        is translated into a list of ZoneEdge objects, which are then used to create ZoneBoundary objects.
+        This method creates BoundPoint widgets for each connected component in the graph,
+        representing the boundaries between zones.
 
-        :return: A list of ZoneBoundary objects representing the boundaries of connected zones.
+        :param graph: A RectangleSideGraph representing the zones and their boundaries.
         """
-        boundaries = []
         zones = {zone.schema.id: zone for zone in self.__container.get_children()}
-        for component in self.__container.graph.get_connected_components():
+
+        for component in graph.get_connected_components():
+            # Create ZoneEdges for each node in the component
             edges = [ZoneEdge(zones[node.rectangle.id], node.side) for node in component]
-            boundaries.append(ZoneBoundary(edges))
-        return boundaries
+            boundary = ZoneBoundary(edges)
+
+            # Create and configure a new BoundPoint
+            point = BoundPoint(boundary)
+            point.set_size_request(self.__point_size, self.__point_size)
+            point.connect("motion-notify-event", self.__on_bound_point_motion)
+
+            # Reset focus point and add the new BoundPoint to the editor
+            self.__focus_point = None
+            self.__editor.add(point)
 
     def __on_bound_point_motion(self, widget, event) -> None:
         """
@@ -146,31 +172,33 @@ class ZoneEditorWindow(TransparentApplicationWindow):
 
     def __on_motion_move_bound_point(self, widget, event) -> None:
         """
-        Handles the motion-notify-event to show and move the BoundPoint widgets along its boundary based on proximity to
-        the pointer.
+        Handle motion-notify-event to show and move BoundPoint widgets along boundary based on pointer proximity.
+
         :param widget: The widget that received the event.
         :param event: The event object containing information about the motion event.
         """
         for point in self.__editor.get_children():
-            point_offset = point.get_allocated_width() / 2  # Calculate the offset for the point
-            x, y = point.boundary.get_center()
-            # Check proximity to pointer based on the axis of the boundary
-            if point.boundary.axis is Axis.x and -self.__threshold < (event.x - x) < self.__threshold:
-                # Handle horizontal movement for BoundPoints controlling horizontal boundaries
-                if point.is_visible() or self.__focus_point is None:
+            x, y = point.boundary.center
+            x1, y1, x2, y2 = point.boundary.position.bounds
+
+            is_within_threshold = {
+                Axis.x: lambda: abs(event.x - x) < self.__threshold and y1 <= event.y <= y2,
+                Axis.y: lambda: abs(event.y - y) < self.__threshold and x1 <= event.x <= x2
+            }
+
+            if is_within_threshold[point.boundary.axis]():
+                if not point.is_visible() and self.__focus_point is None:
                     point.show()
                     self.__focus_point = point
-                self.__editor.move(point, x - point_offset, event.y - point_offset)
-            elif point.boundary.axis is Axis.y and -self.__threshold < (event.y - y) < self.__threshold:
-                # Handle vertical movement for BoundPoints controlling vertical boundaries
-                if point.is_visible() or self.__focus_point is None:
-                    point.show()
-                    self.__focus_point = point
-                self.__editor.move(point, event.x - point_offset, y - point_offset)
-            else:
-                # Hide the BoundPoint if it's not within the threshold distance
-                if point.is_visible():
-                    self.__focus_point = None
+
+                new_position = {
+                    Axis.x: (x - self.__point_offset, event.y - self.__point_offset),
+                    Axis.y: (event.x - self.__point_offset, y - self.__point_offset)
+                }[point.boundary.axis]
+
+                self.__editor.move(point, *new_position)
+            elif point.is_visible():
+                self.__focus_point = None
                 point.hide()
 
     def __set_edge_divider(self, x, y):
@@ -180,13 +208,13 @@ class ZoneEditorWindow(TransparentApplicationWindow):
         :param y: The y-coordinate of the pointer position.
         """
         if self.__focus_point is None:
-            zone_allocation = self.__get_zone_allocation(x, y)  # Get the allocation of the zone under the pointer
+            allocation = self.__container.get_zone(x, y).get_allocation()  # Get the allocation of zone under the pointer
             if self.__edge_axis is Axis.y:
                 # Set the position of the edge divider vertically
-                self.__edge_divider.set_position(x, zone_allocation.y, x, zone_allocation.y + zone_allocation.height)
+                self.__edge_divider.set_position(x, allocation.y, x, allocation.y + allocation.height)
             else:
                 # Set the position of the edge divider horizontally
-                self.__edge_divider.set_position(zone_allocation.x, y, zone_allocation.x + zone_allocation.width, y)
+                self.__edge_divider.set_position(allocation.x, y, allocation.x + allocation.width, y)
             self.__edge_divider.show()
         else:
             self.__edge_divider.hide()  # Hide the edge divider if there is a focused point
@@ -198,28 +226,6 @@ class ZoneEditorWindow(TransparentApplicationWindow):
         :param event: The event object containing information about the motion event.
         """
         self.__set_edge_divider(event.x, event.y)
-
-    def __get_zone_allocation(self, x, y) -> Gdk.Rectangle:
-        """
-        Retrieves the allocation of the zone at the given coordinates.
-        :param x: The x-coordinate.
-        :param y: The y-coordinate.
-        :return: The allocation (Gdk.Rectangle) of the zone.
-        """
-        assert self.get_allocated_width() != 0 and self.get_allocated_height() != 0, \
-            f'Allocated width and/or height is zero. {self.__class__.__name__} must be size allocated before use.'
-
-        for zone in self.__container.get_children():
-            allocation = zone.get_allocation()
-            if allocation.x <= x < allocation.x + allocation.width and allocation.y <= y < allocation.y + allocation.height:
-                return allocation
-
-    def show_all(self):
-        """
-        Shows all widgets within the window and presents the window.
-        """
-        super().show_all()
-        self.present()
 
     def __on_key_press(self, widget, event):
         """
@@ -243,3 +249,25 @@ class ZoneEditorWindow(TransparentApplicationWindow):
             x, y = get_pointer_position()
             self.__set_edge_divider(x, y)
 
+    def __on_button_press(self, widget, event):
+        """
+        Handles the button-press event to initiate zone division.
+
+        When the primary mouse button is pressed, this method identifies the
+        ZonePane at the event coordinates and divides it using the edge divider.
+
+        :param widget: The widget that received the button press event.
+        :param event: The Gdk.Event containing the event details, such as button and coordinates.
+        :return: True to stop further handling of the event.
+        """
+        if event.button == Gdk.BUTTON_PRIMARY:
+            zone = self.__container.get_zone(event.x, event.y)
+            self.__container.divide(zone, self.__edge_divider)
+        return True
+
+    def show_all(self):
+        """
+        Shows all widgets within the window and presents the window.
+        """
+        super().show_all()
+        self.present()

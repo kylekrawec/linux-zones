@@ -1,4 +1,5 @@
 import gi
+import math
 import networkx as nx
 from itertools import groupby, chain
 from shapely.geometry import LineString
@@ -7,6 +8,7 @@ from shapely.ops import linemerge
 gi.require_version('Gtk', '3.0')
 from gi.repository import Gtk, Gdk
 
+from widgets import Line
 from display import get_workarea
 from base import Axis, Side, AbstractRectangleSide, Schema, TransparentApplicationWindow
 from base import GtkStyleableMixin, SchemableMixin
@@ -73,12 +75,7 @@ class ZoneEdge(AbstractRectangleSide):
 
     @property
     def rectangle(self) -> Gdk.Rectangle:
-        """
-        Retrieves the allocation rectangle of the Zone associated with this edge.
-
-        :return: A Gdk.Rectangle representing the allocation of the associated Zone.
-        """
-        return self.zone.get_allocation()
+        return self.zone.schema.rectangle
 
 
 class ZoneBoundary:
@@ -88,16 +85,19 @@ class ZoneBoundary:
     Attributes:
         __edges (set): A set of ZoneEdge objects forming the edge.
         axis (Axis): The axis (x or y) along which the edge is aligned.
+        center (Tuple): The center (x, y) coordinates of the boundary.
+        position (LineString): The (x1, y1) and (x2, y2) point coordinates of the boundary.
     """
 
-    def __init__(self, edges: [ZoneEdge]):
+    def __init__(self, edges: list[ZoneEdge]):
         """
         Initializes the ZoneBoundary with a list of ZoneEdge objects.
         :param edges: A list of ZoneEdge objects forming the edge.
         """
-        self.__edges = set()  # Initialize an empty set for ZoneEdge objects
+        self.__edges = set(edges)  # Stores set of ZoneEdge objects
         self.axis = self.__get_axis(edges)  # Determine the axis of the edge
-        self.add_edges(edges)  # Add the sides to the edge
+        self._set_position()
+        self._set_center()
 
     def __is_edge(self, edges: [ZoneEdge]) -> bool:
         """
@@ -127,41 +127,22 @@ class ZoneBoundary:
         assert len(axes) == 1, 'A ZoneBoundary must only contain ZoneEdges of the same axis. Either (LEFT, RIGHT) for X or (TOP, BOTTOM) for Y.'
         return axes.pop()  # Return the single axis
 
-    def add_edges(self, edges: [ZoneEdge]) -> 'ZoneBoundary':
+    def _set_position(self) -> None:
         """
-        Adds more edges to the ZoneBoundary, ensuring they form a valid contiguous and aligned edge.
-        :param edges: A list of ZoneEdge objects to add.
-        :return: The ZoneBoundary object itself for chaining calls.
-        """
-        assert self.axis is self.__get_axis(edges), f'A ZoneBoundary must only contain ZoneEdges of the same axis. Current axis is {self.axis.name}.'
-
-        # Copy the current set of edges and add the new edges
-        new_edges = self.__edges.copy()
-        new_edges.update(edges)
-
-        # Check if the new set of edges forms a valid boundary
-        if self.__is_edge(new_edges):
-            self.__edges.update(edges)  # Update the set of edges with the new valid edges
-        return self
-
-    def get_center(self) -> tuple[float, float]:
-        """
-        Calculates and returns the center point of the line segment.
-        :return: A tuple (center_x, center_y) representing the center point of the line.
-        """
-        minx, miny, maxx, maxy = self.get_position().bounds  # Get the bounds of the edge
-        center_x = (minx + maxx) / 2  # Calculate the center x-coordinate
-        center_y = (miny + maxy) / 2  # Calculate the center y-coordinate
-        return center_x, center_y
-
-    def get_position(self) -> LineString:
-        """
-        Gets the position of the ZoneBoundary as a LineString.
-        :return: A LineString representing the position of the boundary.
+        Sets the position attribute of the ZoneBoundary.
         """
         lines = [edge.position for edge in self.__edges]  # Get positions of the edges
         bounds = linemerge(lines).bounds  # Merge the lines and get the bounds
-        return LineString([(bounds[0], bounds[1]), (bounds[2], bounds[3])])  # Create a LineString from the bounds
+        self.position = LineString([(bounds[0], bounds[1]), (bounds[2], bounds[3])])  # Create a LineString from the bounds
+
+    def _set_center(self) -> None:
+        """
+        Sets the center attribute of the ZoneBoundary.
+        """
+        minx, miny, maxx, maxy = self.position.bounds  # Get the bounds of the edge
+        center_x = (minx + maxx) / 2  # Calculate the center x-coordinate
+        center_y = (miny + maxy) / 2  # Calculate the center y-coordinate
+        self.center = center_x, center_y
 
     def move_horizontal(self, position: int) -> None:
         """
@@ -179,6 +160,8 @@ class ZoneBoundary:
                     # Adjust the width when moving the right edge
                     allocation.width = position - allocation.x
                 edge.zone.resize(allocation)
+            self._set_position()
+            self._set_center()
 
     def move_vertical(self, position: int) -> None:
         """
@@ -196,6 +179,8 @@ class ZoneBoundary:
                     # Adjust the height when moving the bottom edge
                     allocation.height = position - allocation.y
                 edge.zone.resize(allocation)
+            self._set_position()
+            self._set_center()
 
 
 class RectangleSideGraph:
@@ -263,20 +248,10 @@ class RectangleSideGraph:
             y_nodes.extend((top, bottom))
             self.__graph.add_nodes_from((left, right, top, bottom))
 
-        # Sort nodes to simplify edge discovery
-        x_nodes.sort(key=lambda n: n.position.bounds[Axis.x.value])
-        y_nodes.sort(key=lambda n: n.position.bounds[Axis.y.value])
+        x_nodes = self._sort_and_group(x_nodes, Axis.x)
+        y_nodes = self._sort_and_group(y_nodes, Axis.y)
 
-        if len(x_nodes) > 2:
-            # Remove the nodes that border the left and right most positions
-            groups = [list(g) for k, g in groupby(x_nodes, key=lambda n: n.position.bounds[Axis.x.value])]
-            x_nodes = list(chain.from_iterable(groups[1:-1]))
-        if len(y_nodes) > 2:
-            # Remove the nodes that border the top and bottom most positions
-            groups = [list(g) for k, g in groupby(y_nodes, key=lambda n: n.position.bounds[Axis.y.value])]
-            y_nodes = list(chain.from_iterable(groups[1:-1]))
-
-        # Connect nodes to form graph based on side positions. Also forms connected components which represents boundaries.
+        # Connect nodes to form graph based on side positions. Forms connected components which represents boundaries.
         self.__add_edges(x_nodes)
         self.__add_edges(y_nodes)
 
@@ -284,14 +259,38 @@ class RectangleSideGraph:
         isolated_nodes = list(nx.isolates(self.__graph))
         self.__graph.remove_nodes_from(isolated_nodes)
 
+    def _sort_and_group(self, nodes: [tuple[Schema, Side]], axis: Axis) -> [tuple[Schema, Side]]:
+        """
+        Sorts a list of nodes along the specified axis and groups them into unconnected components.
+
+        This method sorts the given nodes by their positions along the specified
+        axis and the opposite axis. It then groups the nodes by their positions
+        along their axis to remove components that border the container.
+
+        :param nodes: A list of tuples containing Schema objects and their corresponding sides.
+        :param axis: The axis (Axis.x or Axis.y) along which to sort the nodes.
+        :return: A list of grouped nodes sorted by their positions.
+        """
+        # Determine the opposite axis for sorting
+        op_axis = Axis.y if axis is Axis.x else Axis.x
+        # Sort edges by their positions along the opposite axis and the given axis
+        nodes.sort(key=lambda node: (node.position.bounds[axis.value], node.position.bounds[op_axis.value]))
+        # Group the sorted sides by their position along the opposite axis
+        groups = [list(g) for k, g in groupby(nodes, key=lambda node: node.position.bounds[axis.value])]
+
+        return list(chain.from_iterable(groups[1:-1]))
+
     def __add_edges(self, nodes: [tuple[Schema, Side]]) -> None:
         """
         Adds edges between nodes representing adjacent rectangle sides if they touch or intersect.
 
+        This method iterates through pairs of adjacent nodes and adds edges
+        between them if their positions touch or intersect.
+
         :param nodes: A list of tuples containing Schema objects and their corresponding sides.
         """
         for u, v in zip(nodes, nodes[1:]):
-            if u.position.touches(v.position) or u.position.intersects(v.position):
+            if u.position.intersects(v.position) or u.position.touches(v.position):
                 self.__graph.add_edge(u, v)
 
 
@@ -309,33 +308,15 @@ class ZoneContainer(Gtk.Fixed):
         :param schemas: A list of dicts representing schema data to initialize Zone objects.
         """
         super().__init__()
+
+        self.__style_classes = None
         for i, schema in enumerate(schemas):
             zone = Zone(Schema(schema))
             zone.label.set_label(str(i+1))
             self.add(zone)  # Add Zone objects to the container
 
         self.graph = RectangleSideGraph([child.schema for child in self.get_children()])
-        self.initial_allocation_handler_id = self.connect('size-allocate', self.__on_initial_allocation)
-
-    def __on_initial_allocation(self, widget, allocation) -> None:
-        """
-        Handles the size-allocate signal to scale and allocate sizes for child Zone objects. Disconnects after the
-        first allocation.
-        :param widget: The widget that received the signal.
-        :param allocation: The allocation (Gtk.Allocation) containing the new size.
-        """
-        for zone in self.get_children():
-            if zone.schema.is_normal:
-                zone.schema.scale(allocation.width, allocation.height)
-
-            # Translate zone position relative to container position
-            zone.schema.x += allocation.x
-            zone.schema.y += allocation.y
-
-            zone.size_allocate(zone.schema.rectangle)
-
         self.connect('size-allocate', self.__on_size_allocate)
-        self.disconnect(self.initial_allocation_handler_id)
 
     def __on_size_allocate(self, widget, allocation) -> None:
         """
@@ -343,8 +324,35 @@ class ZoneContainer(Gtk.Fixed):
         :param widget: The widget that received the signal.
         :param allocation: The allocation (Gtk.Allocation) containing the new size.
         """
-        for zone in self.get_children():
+        # Sort zones by the Euclidean distance of their (x, y) bounds relative to the orign
+        sorted_zones = sorted(self.get_children(), key=lambda zone: math.dist((0, 0), (zone.schema.x, zone.schema.y)))
+        for i, zone in enumerate(sorted_zones):
+            if zone.schema.is_normal:
+                zone.schema.scale(allocation.width, allocation.height)
+
+            # Translate zone position relative to container position
+            zone.schema.x += allocation.x
+            zone.schema.y += allocation.y
+
+            # Label zones based on proximity to the origin from lower(closer) to higher(further)
+            zone.label.set_label(str(i+1))
             zone.size_allocate(zone.schema.rectangle)
+
+    def get_zone(self, x, y) -> Zone:
+        """
+        Retrieves the Zone object at the specified coordinates.
+        :param x: The x-coordinate.
+        :param y: The y-coordinate.
+        :return: The Zone object at the specified coordinates.
+        """
+        # Verify the window has already been allocated.
+        assert self.get_allocated_width() != 0 and self.get_allocated_height() != 0, \
+            f'Allocated width and/or height is zero. {self.__class__.__name__} must be size allocated before use.'
+
+        for zone in self.get_children():
+            allocation = zone.get_allocation()
+            if allocation.x <= x < allocation.x + allocation.width and allocation.y <= y < allocation.y + allocation.height:
+                return zone
 
     def add_zone_style_class(self, *style_classes):
         """
@@ -352,9 +360,60 @@ class ZoneContainer(Gtk.Fixed):
         :param style_classes: One or more style class names to add.
         :return: The ZoneContainer object itself for chaining calls.
         """
+        self.__style_classes = style_classes
         for child in self.get_children():
             child.add_style_class(*style_classes)  # Add style classes to each child
         return self
+
+    def divide(self, zone: Zone, line: Line) -> None:
+        """
+        Divides a Zone into two new zones along the specified line.
+
+        This method takes an existing Zone and splits it into two new Zones based on
+        the position of the provided Line. The division can be either horizontal or
+        vertical, depending on the Line's axis.
+
+        :param zone: The Zone object to be divided.
+        :param line: The Line object defining the axis and position for division.
+        :raises ValueError: If the given zone is not a child of this container.
+        """
+        # Validate that the zone is a child of this container
+        if zone not in self.get_children():
+            raise ValueError(f"Zone must be a child of {self.__class__.__name__} to divide.")
+
+        # Get the current allocation of the zone and create two copies
+        allocation = zone.get_allocation()
+        alloc_a, alloc_b = allocation.copy(), allocation.copy()
+
+        # Adjust allocations based on the line's axis and position
+        if line.axis is Axis.y:
+            # Vertical division
+            x = round(line.x1)
+            alloc_b.x = x
+            alloc_b.width = allocation.x + allocation.width - x
+            alloc_a.width -= alloc_b.width
+        else:
+            # Horizontal division
+            y = round(line.y1)
+            alloc_b.y = y
+            alloc_b.height = allocation.y + allocation.height - y
+            alloc_a.height -= alloc_b.height
+
+        # Remove the original zone
+        self.remove(zone)
+
+        # Create new zones based on the adjusted allocations
+        new_zones = [Zone(Schema(alloc)) for alloc in (alloc_a, alloc_b)]
+
+        # Add new zones to the container and apply style classes if any
+        for zone in new_zones:
+            self.add(zone)
+            if self.__style_classes:
+                zone.add_style_class(*self.__style_classes)
+
+        # Update the container's display if it's currently visible
+        if self.is_visible():
+            self.show_all()
 
 
 class ZoneDisplayWindow(TransparentApplicationWindow):
@@ -395,14 +454,7 @@ class ZoneDisplayWindow(TransparentApplicationWindow):
         :param y: The y-coordinate.
         :return: The Zone object at the specified coordinates.
         """
-        # Verify the window has already been allocated.
-        assert self.get_allocated_width() != 0 and self.get_allocated_height() != 0, \
-            f'Allocated width and/or height is zero. {self.__class__.__name__} must be size allocated before use.'
-
-        for zone in self.__container.get_children():
-            allocation = zone.get_allocation()
-            if allocation.x <= x < allocation.x + allocation.width and allocation.y <= y < allocation.y + allocation.height:
-                return zone
+        return self.__container.get_zone(x, y)
 
     def set_active(self, zone: Zone) -> None:
         """
@@ -421,7 +473,9 @@ class ZoneDisplayWindow(TransparentApplicationWindow):
         Sets a new list of dicts representing schema data for the ZoneDisplayWindow.
         :param schemas: A new list of dict objects.
         """
+        workarea = get_workarea()
         self.remove(self.__container)  # Remove the current container
         # Create a new container with the new schema and add style classes
         self.__container = ZoneContainer(schemas).add_zone_style_class('zone-pane', 'passive-zone')
+        self.__container.set_size_request(workarea.width, workarea.height)
         self.add(self.__container)  # Add the new container to the window
