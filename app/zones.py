@@ -71,7 +71,7 @@ class ZoneEdge(AbstractRectangleSide):
         """
         super().__init__(zone.schema, side)
         self.zone = zone  # The Zone object associated with this side
-        self.axis = Axis.x if side in {Side.LEFT, Side.RIGHT} else Axis.y  # Determine the axis based on the side
+        self.axis = Axis.x if side in {Side.TOP, Side.BOTTOM} else Axis.y  # Determine the axis based on the side
 
     @property
     def rectangle(self) -> Gdk.Rectangle:
@@ -149,7 +149,7 @@ class ZoneBoundary:
         Moves the edge horizontally to a new position.
         :param position: Pixel value of a new position to move the edge.
         """
-        if self.axis is Axis.x:
+        if self.axis is Axis.y:
             for edge in self.__edges:
                 allocation = edge.rectangle
                 if edge.side is Side.LEFT:
@@ -168,7 +168,7 @@ class ZoneBoundary:
         Moves the edge vertically to a new position.
         :param position: Pixel value of a new position to move the edge.
         """
-        if self.axis is Axis.y:
+        if self.axis is Axis.x:
             for edge in self.__edges:
                 allocation = edge.rectangle
                 if edge.side is Side.TOP:
@@ -240,20 +240,20 @@ class RectangleSideGraph:
         :param schemas: A list of Schema objects representing rectangles.
         """
         # Add all possible edges
-        x_nodes, y_nodes = [], []
+        y_nodes, x_nodes = [], []
         for schema in schemas:
             left, right = AbstractRectangleSide(schema, Side.LEFT), AbstractRectangleSide(schema, Side.RIGHT)
             top, bottom = AbstractRectangleSide(schema, Side.TOP), AbstractRectangleSide(schema, Side.BOTTOM)
-            x_nodes.extend((left, right))
-            y_nodes.extend((top, bottom))
+            y_nodes.extend((left, right))
+            x_nodes.extend((top, bottom))
             self.__graph.add_nodes_from((left, right, top, bottom))
 
-        x_nodes = self._sort_and_group(x_nodes, Axis.x)
-        y_nodes = self._sort_and_group(y_nodes, Axis.y)
+        y_nodes = self._sort_and_group(y_nodes, Axis.x)
+        x_nodes = self._sort_and_group(x_nodes, Axis.y)
 
         # Connect nodes to form graph based on side positions. Forms connected components which represents boundaries.
-        self.__add_edges(x_nodes)
         self.__add_edges(y_nodes)
+        self.__add_edges(x_nodes)
 
         # Find and remove isolated nodes(edges)
         isolated_nodes = list(nx.isolates(self.__graph))

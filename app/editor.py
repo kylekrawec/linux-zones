@@ -37,10 +37,10 @@ class BoundPoint(Gtk.Button):
         parent = widget.get_parent()
         # Translate coordinates relative to the parent widget if it exists
         x, y = event if parent is None else self.translate_coordinates(parent, event.x, event.y)
-        if self.boundary.axis is Axis.x and x >= 0:
-            self.boundary.move_horizontal(x)  # Move the boundary horizontally if axis is x
-        elif y >= 0:
-            self.boundary.move_vertical(y)  # Move the boundary vertically if axis is y
+        if self.boundary.axis is Axis.y and y >= 0:
+            self.boundary.move_horizontal(x)  # Move the boundary horizontally if axis is y
+        elif x >= 0:
+            self.boundary.move_vertical(y)  # Move the boundary vertically if axis is x
 
 
 class ZoneEditorWindow(TransparentApplicationWindow):
@@ -182,13 +182,7 @@ class ZoneEditorWindow(TransparentApplicationWindow):
         :param event: The event object containing information about the motion event.
         """
         x, y = widget.translate_coordinates(self, event.x, event.y)
-        offset_size = widget.get_allocated_width() / 2
-        x -= offset_size
-        y -= offset_size
-        if widget.boundary.axis is Axis.x and x >= 0:
-            self._editor.move(widget, x, y)
-        elif y >= 0:
-            self._editor.move(widget, x, y)
+        self._editor.move(widget, x - self._point_offset, y - self._point_offset)
 
     def _on_motion_move_bound_point(self, widget, event) -> None:
         """
@@ -202,8 +196,8 @@ class ZoneEditorWindow(TransparentApplicationWindow):
             x1, y1, x2, y2 = point.boundary.position.bounds
 
             is_within_threshold = {
-                Axis.x: lambda: abs(event.x - x) < self._threshold and y1 <= event.y <= y2,
-                Axis.y: lambda: abs(event.y - y) < self._threshold and x1 <= event.x <= x2
+                Axis.y: lambda: abs(event.x - x) < self._threshold and y1 <= event.y <= y2,
+                Axis.x: lambda: abs(event.y - y) < self._threshold and x1 <= event.x <= x2
             }
 
             if is_within_threshold[point.boundary.axis]():
@@ -212,14 +206,31 @@ class ZoneEditorWindow(TransparentApplicationWindow):
                     self._focus_point = point
 
                 new_position = {
-                    Axis.x: (x - self._point_offset, event.y - self._point_offset),
-                    Axis.y: (event.x - self._point_offset, y - self._point_offset)
+                    Axis.y: (x - self._point_offset, event.y - self._point_offset),
+                    Axis.x: (event.x - self._point_offset, y - self._point_offset)
                 }[point.boundary.axis]
 
                 self._editor.move(point, *new_position)
             elif point.is_visible():
                 self._focus_point = None
                 point.hide()
+
+    def _get_nearby_boundary(self, x: float, y: float, threshold: int = 50) -> ZoneBoundary | None:
+        """
+        Snaps the given coordinates to the nearest boundary if within given threshold.
+
+        :param x: The x-coordinate to potentially snap.
+        :param y: The y-coordinate to potentially snap.
+        :param threshold: The maximum distance (in pixels) within which a boundary is considered "nearby".
+        :return: A tuple of the (potentially) adjusted x and y coordinates.
+        """
+        index, coord = (0, x) if self._edge_axis is Axis.y else (1, y)
+        nearest_boundary = next(
+            (b for b in self._boundaries[self._edge_axis]
+             if abs(coord - b.center[index]) < threshold),
+            None
+        )
+        return nearest_boundary
 
     def _set_edge_divider(self, x, y):
         """
@@ -230,6 +241,10 @@ class ZoneEditorWindow(TransparentApplicationWindow):
         if self._focus_point is None:
             # Get the allocation of zone under the pointer
             allocation = self._container.get_zone(x, y).get_allocation()
+
+            # Snap divider position if within proximity to an existing boundary
+            boundary = self._get_nearby_boundary(x, y, self._threshold)
+            x, y = boundary.center if boundary else (x, y)
 
             # Set the position of the edge divider vertically or horizontally
             x1, y1, x2, y2 = {
@@ -283,7 +298,7 @@ class ZoneEditorWindow(TransparentApplicationWindow):
         :param event: The Gdk.Event containing the event details, such as button and coordinates.
         :return: True to stop further handling of the event.
         """
-        if event.button == Gdk.BUTTON_PRIMARY:
+        if event.button == Gdk.BUTTON_PRIMARY and not self._focus_point:
             zone = self._container.get_zone(event.x, event.y)
             self._container.divide(zone, self._edge_divider)
         return True
