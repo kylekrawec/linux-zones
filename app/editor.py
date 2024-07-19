@@ -128,8 +128,7 @@ class ZoneEditorWindow(TransparentApplicationWindow):
                 self._editor.remove(child)
 
         # Create new graph and add boundary points
-        schemas = [zone.schema for zone in container.get_children()]
-        graph = RectangleSideGraph(schemas)
+        graph = RectangleSideGraph(container.get_children())
         self._boundaries = self._create_boundaries(graph)
         self._add_boundary_points(self._boundaries[Axis.x] + self._boundaries[Axis.y])
 
@@ -145,16 +144,10 @@ class ZoneEditorWindow(TransparentApplicationWindow):
         :return: A dictionary with Axis keys and lists of ZoneBoundary objects as values.
         """
         boundaries = {Axis.x: [], Axis.y: []}
-        # Create a mapping of schema IDs to Zone objects
-        zones = {zone.schema.id: zone for zone in self._container.get_children()}
-
+        # Create boundary for each component and organize by axis
         for component in graph.get_connected_components():
-            # Create ZoneEdges for each node in the component
-            edges = [ZoneEdge(zones[node.rectangle.id], node.side) for node in component]
-            boundary = ZoneBoundary(edges)
-            # Organize boundaries by axis
+            boundary = ZoneBoundary(component)
             boundaries[boundary.axis].append(boundary)
-
         return boundaries
 
     def _add_boundary_points(self, boundaries: list[ZoneBoundary]) -> None:

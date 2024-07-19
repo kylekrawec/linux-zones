@@ -99,24 +99,6 @@ class ZoneBoundary:
         self._set_position()
         self._set_center()
 
-    def __is_edge(self, edges: [ZoneEdge]) -> bool:
-        """
-        Checks if the given sides form a valid contiguous and aligned edge.
-        :param edges: A list of ZoneEdge objects to check.
-        :return: True if the sides form a valid edge, False otherwise.
-        """
-        lines = [edge.position for edge in edges]  # Get positions of the edges
-        lines.sort(key=lambda line: line.bounds[0])  # Sort lines by their starting position on the axis
-        axis_position = lines[0].coords[0][self.axis.value]  # Get the position on the axis
-
-        # Verify that all LineString are contiguous and aligned
-        for line1, line2 in zip(lines, lines[1:]):
-            aligned = any(coord[self.axis.value] == axis_position for coord in line2.coords)
-            connected = line1.touches(line2) or line1.intersects(line2)
-            if not connected or not aligned:
-                return False
-        return True
-
     def __get_axis(self, edges: [ZoneEdge]) -> Axis:
         """
         Determines the axis of the ZoneBoundary based on the provided edges.
@@ -195,19 +177,16 @@ class RectangleSideGraph:
         __graph (nx.Graph): The underlying networkx Graph object storing rectangle edge relations.
     """
 
-    def __init__(self, schemas: list[Schema]):
+    def __init__(self, zones: list[Zone]):
         """
         Initializes the RectangleSideGraph with a list of Schema objects generating a graph of rectangle edge relations
         based on their properties.
 
-        :param schemas: A list containing Schema objects representing rectangle definitions.
-        :raises TypeError: If schemas is not a list or does not contain objects of types Schema.
+        :param zones: A list containing Zone objects representing rectangles.
         """
         super().__init__()
         self.__graph = nx.Graph()
-        assert len(schemas) > 0 and isinstance(schemas, list), 'Schema data must be a list containing one or more items.'
-        assert all(isinstance(item, Schema) for item in schemas), f'Schema data must be a list of {Schema}.'
-        self.__generate(schemas)
+        self.__generate(zones)
 
     def read_file(self, filename: str) -> None:
         """
@@ -233,17 +212,17 @@ class RectangleSideGraph:
         """
         return list(nx.connected_components(self.__graph))
 
-    def __generate(self, schemas: [Schema]):
+    def __generate(self, zones: [Zone]):
         """
         Generates the graph by adding edges between adjacent rectangle sides based on their positions.
 
-        :param schemas: A list of Schema objects representing rectangles.
+        :param zones: A list of Zone objects representing rectangles.
         """
         # Add all possible edges
         y_nodes, x_nodes = [], []
-        for schema in schemas:
-            left, right = AbstractRectangleSide(schema, Side.LEFT), AbstractRectangleSide(schema, Side.RIGHT)
-            top, bottom = AbstractRectangleSide(schema, Side.TOP), AbstractRectangleSide(schema, Side.BOTTOM)
+        for zone in zones:
+            left, right = ZoneEdge(zone, Side.LEFT), ZoneEdge(zone, Side.RIGHT)
+            top, bottom = ZoneEdge(zone, Side.TOP), ZoneEdge(zone, Side.BOTTOM)
             y_nodes.extend((left, right))
             x_nodes.extend((top, bottom))
             self.__graph.add_nodes_from((left, right, top, bottom))
@@ -296,10 +275,7 @@ class RectangleSideGraph:
 
 class ZoneContainer(Gtk.Fixed):
     """
-    A container that holds multiple Zone objects and manages their positions and styles.
-
-    Attributes:
-        graph (RectangleSideGraph): Graph representing positions of zone sides within the container.
+    A container that holds multiple Zone objects, managing their positions and styles.
     """
 
     def __init__(self, schemas: list[dict]):
@@ -315,7 +291,6 @@ class ZoneContainer(Gtk.Fixed):
             zone.label.set_label(str(i+1))
             self.add(zone)  # Add Zone objects to the container
 
-        self.graph = RectangleSideGraph([child.schema for child in self.get_children()])
         self.connect('size-allocate', self.__on_size_allocate)
 
     def __on_size_allocate(self, widget, allocation) -> None:
