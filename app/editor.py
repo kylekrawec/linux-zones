@@ -3,9 +3,11 @@ import gi
 gi.require_version('Gtk', '3.0')
 from gi.repository import Gtk, Gdk
 
+from shapely.geometry import Point
+
 from display import get_pointer_position, get_workarea
-from base import Axis, TransparentApplicationWindow
-from zones import ZoneBoundary, ZoneContainer, ZoneEdge, RectangleSideGraph
+from base import Axis, Side, TransparentApplicationWindow
+from zones import Zone, ZoneBoundary, ZoneContainer, RectangleSideGraph
 from widgets import Line
 
 
@@ -13,31 +15,170 @@ class BoundPoint(Gtk.Button):
     """
     A button that represents a draggable point bound to a ZoneBoundary.
 
-    Attributes:
-        boundary (ZoneBoundary): The ZoneBoundary to which the point is bound.
+    This class extends Gtk.Button to create a draggable point that is constrained
+    by a ZoneBoundary. It handles its own drag source setup and boundary range calculation.
+
+    :ivar boundary: The ZoneBoundary to which the point is bound.
+    :ivar _lower: The lower bound of the point's movement range.
+    :ivar _upper: The upper bound of the point's movement range.
     """
-    def __init__(self, boundary: ZoneBoundary):
+
+    def __init__(self, boundary: ZoneBoundary, buffer: int):
         """
         Initializes the BoundPoint with a ZoneBoundary.
+
         :param boundary: The ZoneBoundary to which the point is bound.
+        :param buffer: A bounding box surrounding a boundary forbidding interaction within.
         """
         super().__init__()
+        self.boundary = boundary
+        self._buffer = buffer
+        self._lower, self._upper = 0, 0
+        self.boundary.set_buffer(buffer)
+
         # Set object to be a draggable source.
         self.drag_source_set(Gdk.ModifierType.BUTTON1_MASK, [], Gdk.DragAction.MOVE)
         self.drag_source_add_text_targets()
 
-        self.boundary = boundary
+        # Set up event handling for button press
+        self.set_events(Gdk.EventMask.BUTTON_PRESS_MASK)
+        self.connect('button-press-event', self._on_button_press)
+
+    def _on_button_press(self, widget, event) -> None:
+        """
+        Handler for button press events.
+
+        This method calculates and sets the boundary range when the button is pressed,
+        preparing for a potential drag operation.
+
+        :param widget: The widget that received the event.
+        :param event: The event data.
+        """
+        self._lower, self._upper = self.get_boundary_range()
+
+    def get_boundary_range(self) -> tuple[int, int]:
+        """
+        Calculates the valid range for this boundary point.
+
+        This method determines the minimum and maximum positions that this point
+        can occupy based on its associated boundary and the zones it separates.
+
+        :return: A tuple containing the lower and upper bounds of the valid range.
+        """
+        is_vertical = self.boundary.axis is Axis.y
+
+        # Determine which attributes to use based on the boundary axis
+        edge_attr = 'x' if is_vertical else 'y'
+        size_attr = 'width' if is_vertical else 'height'
+        lower_side = Side.RIGHT if is_vertical else Side.BOTTOM
+
+        # Calculate the lower bound
+        lower = max(
+            getattr(edge.zone.schema, edge_attr)
+            for edge in self.boundary.get_edges()
+            if edge.side is lower_side
+        ) + self._buffer
+
+        # Calculate the upper bound
+        upper = min(
+            getattr(edge.zone.schema, edge_attr) + getattr(edge.zone.schema, size_attr)
+            for edge in self.boundary.get_edges()
+            if edge.side is not lower_side
+        ) - self._buffer
+
+        return lower, upper
+
+    def is_valid_position(self, x: int, y: int) -> bool:
+        """
+        Checks if a given position is valid for this boundary point.
+
+        :param x: The x-coordinate of the position to check.
+        :param y: The y-coordinate of the position to check.
+        :return: True if the position is within the valid range, False otherwise.
+        """
+        position = x if self.boundary.axis is Axis.y else y
+        return self._lower <= position <= self._upper
 
 
 class Editor(Gtk.Fixed):
+    """
+    A custom widget that serves as an editor for manipulating BoundPoint widgets.
+
+    This class extends Gtk.Fixed to create a drag destination for BoundPoint widgets,
+    allowing them to be moved within the editor.
+    """
+
+    def __init__(self):
+        """
+        Initializes the Editor widget and sets it up as a drag destination.
+        """
+        super().__init__()
+
+        # Make the editor a drag destination
+        self.drag_dest_set(Gtk.DestDefaults.ALL, [], Gdk.DragAction.MOVE)
+        self.drag_dest_add_text_targets()
+
+        # Connect the drag-motion signal to the handler
+        self.connect('drag-motion', self._on_boundary_drag)
+
+    def _on_boundary_drag(self, widget: Gtk.Widget, context: Gdk.DragContext, x: int, y: int, time: int) -> bool:
+        """
+        Handles the drag-motion signal to move the BoundPoint widget.
+
+        :param widget: The editor widget handling BoundPoints.
+        :param context: The drag context.
+        :param x: The x-coordinate of the current drag position.
+        :param y: The y-coordinate of the current drag position.
+        :param time: The timestamp of the event.
+        :return: True to indicate the drag motion was handled.
+        """
+        point = Gtk.drag_get_source_widget(context)
+        if point.is_valid_position(x, y):
+            self.move(point, x, y)
+        return True
+
+    @staticmethod
+    def get_boundaries(zones: list[Zone]) -> dict[Axis, list[ZoneBoundary]]:
+        """
+        Generates boundaries from a list of zones.
+
+        This method creates a RectangleSideGraph from the given zones and uses
+        connected components to form boundaries, organizing them by axis.
+
+        :param zones: A list of Zone objects to generate boundaries from.
+        :return: A dictionary mapping Axis to lists of ZoneBoundary objects.
+        """
+        boundaries = {Axis.x: [], Axis.y: []}
+        graph = RectangleSideGraph(zones)
+        # Use connected components to form each boundary and organize boundaries by axis.
+        for component in graph.get_connected_components():
+            boundary = ZoneBoundary(component)
+            boundaries[boundary.axis].append(boundary)
+
+        return boundaries
+
     def move(self, widget: BoundPoint, x: int, y: int):
+        """
+        Moves a BoundPoint widget to a new position.
+
+        This method updates the position of the boundary associated with the widget
+        and then moves the widget itself within the editor.
+
+        :param widget: The BoundPoint widget to move.
+        :param x: The new x-coordinate for the widget.
+        :param y: The new y-coordinate for the widget.
+        """
+        # Update the boundary position based on its axis
         if widget.boundary.axis is Axis.y:
             widget.boundary.move_horizontal(x)
         else:
             widget.boundary.move_vertical(y)
 
+        # Adjust the widget position to center it on the cursor
         x -= widget.get_allocated_width() / 2
         y -= widget.get_allocated_height() / 2
+
+        # Move the widget using the parent class method
         super().move(widget, x, y)
 
 
@@ -63,10 +204,6 @@ class ZoneEditorWindow(TransparentApplicationWindow):
         super().__init__()
         self.maximize()
         workarea = get_workarea()
-
-        # Make the window a drag destination
-        self.drag_dest_set(Gtk.DestDefaults.ALL, [], Gdk.DragAction.MOVE)
-        self.drag_dest_add_text_targets()
 
         # Initialize attributes
         self._threshold = 50
@@ -106,7 +243,6 @@ class ZoneEditorWindow(TransparentApplicationWindow):
         self.connect('key-press-event', self._on_key_press)
         self.connect('key-release-event', self._on_key_release)
         self.connect('button-press-event', self._on_button_press)
-        self.connect('drag-motion', self._on_boundary_drag)
 
     def _on_container_allocation(self, container: ZoneContainer, allocation: Gdk.Rectangle) -> None:
         """
@@ -127,28 +263,10 @@ class ZoneEditorWindow(TransparentApplicationWindow):
             if isinstance(child, BoundPoint):
                 self._editor.remove(child)
 
-        # Create new graph and add boundary points
-        graph = RectangleSideGraph(container.get_children())
-        self._boundaries = self._create_boundaries(graph)
+        # Add boundary points
+        zones = container.get_children()
+        self._boundaries = self._editor.get_boundaries(zones)
         self._add_boundary_points(self._boundaries[Axis.x] + self._boundaries[Axis.y])
-
-    def _create_boundaries(self, graph: RectangleSideGraph) -> dict[Axis, list[ZoneBoundary]]:
-        """
-        Creates ZoneBoundary objects from a RectangleSideGraph and organizes them by axis.
-
-        This method processes the connected components of the graph, creates ZoneBoundary
-        objects for each component, and sorts them into horizontal (x-axis) and vertical
-        (y-axis) boundaries.
-
-        :param graph: A RectangleSideGraph representing the layout of zones.
-        :return: A dictionary with Axis keys and lists of ZoneBoundary objects as values.
-        """
-        boundaries = {Axis.x: [], Axis.y: []}
-        # Create boundary for each component and organize by axis
-        for component in graph.get_connected_components():
-            boundary = ZoneBoundary(component)
-            boundaries[boundary.axis].append(boundary)
-        return boundaries
 
     def _add_boundary_points(self, boundaries: list[ZoneBoundary]) -> None:
         """
@@ -162,7 +280,7 @@ class ZoneEditorWindow(TransparentApplicationWindow):
         """
         for boundary in boundaries:
             # Create and configure a new BoundPoint
-            point = BoundPoint(boundary)
+            point = BoundPoint(boundary, self._threshold * 2)
             point.set_size_request(self._point_size, self._point_size)
 
             # Add the new BoundPoint to the editor
@@ -170,15 +288,6 @@ class ZoneEditorWindow(TransparentApplicationWindow):
             point.show()
 
         self._focus_point = None
-
-    def _on_boundary_drag(self, editor, context, x, y, time) -> bool:
-        """
-        Handles the drag-motion signal to move the BoundPoint widget.
-        :param editor: The editor class handling BoundPoints.
-        """
-        point = Gtk.drag_get_source_widget(context)
-        self._editor.move(point, x, y)
-        return True
 
     def _on_motion_move_bound_point(self, widget, event) -> None:
         """
@@ -294,7 +403,11 @@ class ZoneEditorWindow(TransparentApplicationWindow):
         :param event: The Gdk.Event containing the event details, such as button and coordinates.
         :return: True to stop further handling of the event.
         """
-        if event.button == Gdk.BUTTON_PRIMARY and not self._focus_point:
+        # Check if cursor position intersects a boundary buffer
+        boundary = self._get_nearby_boundary(event.x, event.y, self._threshold * 2)
+        valid_position = True if not boundary else not boundary.buffer.intersects(Point(event.x, event.y))
+        # Divide zone if cursor is exterior to all boundary buffers
+        if event.button == Gdk.BUTTON_PRIMARY and valid_position and self._edge_divider.is_visible():
             zone = self._container.get_zone(event.x, event.y)
             self._container.divide(zone, self._edge_divider)
         return True

@@ -2,8 +2,8 @@ import gi
 import math
 import networkx as nx
 from itertools import groupby, chain
-from shapely.geometry import LineString
-from shapely.ops import linemerge
+from shapely.geometry import LineString, Point
+from shapely.ops import linemerge, unary_union
 
 gi.require_version('Gtk', '3.0')
 from gi.repository import Gtk, Gdk
@@ -87,6 +87,7 @@ class ZoneBoundary:
         axis (Axis): The axis (x or y) along which the edge is aligned.
         center (Tuple): The center (x, y) coordinates of the boundary.
         position (LineString): The (x1, y1) and (x2, y2) point coordinates of the boundary.
+        buffer (Geometry): A buffer surrounding the ZoneBoundary position. Must be set prior to use.
     """
 
     def __init__(self, edges: list[ZoneEdge]):
@@ -96,6 +97,7 @@ class ZoneBoundary:
         """
         self.__edges = set(edges)  # Stores set of ZoneEdge objects
         self.axis = self.__get_axis(edges)  # Determine the axis of the edge
+        self.buffer = None
         self._set_position()
         self._set_center()
 
@@ -125,6 +127,26 @@ class ZoneBoundary:
         center_x = (minx + maxx) / 2  # Calculate the center x-coordinate
         center_y = (miny + maxy) / 2  # Calculate the center y-coordinate
         self.center = center_x, center_y
+
+    def set_buffer(self, distance: int):
+        """
+        Create a buffer around a boundary position that extends to the sides but not the ends.
+        :param distance: The buffer distance
+        """
+        # Create normal buffer
+        buffer = self.position.buffer(distance, cap_style=3)  # cap_style=3 for flat ends
+
+        # Create buffers at start and end points
+        start_point = Point(self.position.coords[0])
+        end_point = Point(self.position.coords[-1])
+        start_buffer = start_point.buffer(distance)
+        end_buffer = end_point.buffer(distance)
+
+        # Subtract end buffers from full buffer
+        self.buffer = buffer.difference(unary_union([start_buffer, end_buffer]))
+
+    def get_edges(self) -> list[ZoneEdge]:
+        return list(self.__edges)
 
     def move_horizontal(self, position: int) -> None:
         """
