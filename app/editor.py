@@ -5,6 +5,7 @@ from gi.repository import Gtk, Gdk
 
 from shapely.geometry import Point
 
+from config import config
 from display import get_pointer_position, get_workarea
 from base import Axis, Side, TransparentApplicationWindow
 from zones import Zone, ZoneBoundary, ZoneContainer, RectangleSideGraph
@@ -23,7 +24,7 @@ class BoundPoint(Gtk.Button):
     :ivar _upper: The upper bound of the point's movement range.
     """
 
-    def __init__(self, boundary: ZoneBoundary, buffer: int):
+    def __init__(self, boundary: ZoneBoundary):
         """
         Initializes the BoundPoint with a ZoneBoundary.
 
@@ -32,9 +33,7 @@ class BoundPoint(Gtk.Button):
         """
         super().__init__()
         self.boundary = boundary
-        self._buffer = buffer
         self._lower, self._upper = 0, 0
-        self.boundary.set_buffer(buffer)
 
         # Set object to be a draggable source.
         self.drag_source_set(Gdk.ModifierType.BUTTON1_MASK, [], Gdk.DragAction.MOVE)
@@ -77,14 +76,14 @@ class BoundPoint(Gtk.Button):
             getattr(edge.zone.schema, edge_attr)
             for edge in self.boundary.get_edges()
             if edge.side is lower_side
-        ) + self._buffer
+        ) + config.settings.get('boundary-buffer-size')
 
         # Calculate the upper bound
         upper = min(
             getattr(edge.zone.schema, edge_attr) + getattr(edge.zone.schema, size_attr)
             for edge in self.boundary.get_edges()
             if edge.side is not lower_side
-        ) - self._buffer
+        ) - config.settings.get('boundary-buffer-size')
 
         return lower, upper
 
@@ -206,7 +205,7 @@ class ZoneEditorWindow(TransparentApplicationWindow):
         workarea = get_workarea()
 
         # Initialize attributes
-        self._threshold = 50
+        self._threshold = config.settings.get('boundary-buffer-size') / 2
         self._focus_point = None
         self._edge_axis = Axis.y
         self._edge_divider = Line(0, 0, 0, 0)
@@ -255,8 +254,7 @@ class ZoneEditorWindow(TransparentApplicationWindow):
         :param allocation: The new allocation containing the updated size information.
         """
         # Update threshold and point size based on new allocation
-        self._threshold = round(min(allocation.width, allocation.height) * 0.04)
-        self._point_size = round(min(allocation.width, allocation.height) * 0.025)
+        self._point_size = self._threshold / 2
 
         # Remove existing BoundPoints
         for child in self._editor.get_children():
@@ -280,7 +278,7 @@ class ZoneEditorWindow(TransparentApplicationWindow):
         """
         for boundary in boundaries:
             # Create and configure a new BoundPoint
-            point = BoundPoint(boundary, self._threshold * 2)
+            point = BoundPoint(boundary)
             point.set_size_request(self._point_size, self._point_size)
 
             # Add the new BoundPoint to the editor
