@@ -9,7 +9,7 @@ from pynput import keyboard, mouse
 from base import State
 from zones import ZoneDisplayWindow
 from display import get_workarea
-from config import Config
+from config import config
 from settings import SettingsWindow
 
 
@@ -22,26 +22,14 @@ class Application(Gtk.Application):
         self.mouse_pressed = False
         self.current_zone = None
 
-        # Declare Configs
-        self.settings_manager = Config('settings.json')
-        self.presets_manager = Config('presets.json')
-        self.templates_manager = Config('templates.json')
-
-        # Load settings
-        self.settings = self.settings_manager.load()
-
-        # Extract schemas
-        self.presets = self.presets_manager.load()
-        self.templates = self.templates_manager.load()
-
         # Default settings
-        self.default_preset = self.presets.get(self.settings.get('default_preset'))
+        self.default_preset = config.presets.get(config.settings.get('default_preset'))
 
         # Create application windows
         self.zone_display_window = ZoneDisplayWindow(self.default_preset)
         self.settings_window = SettingsWindow()
-        self.settings_window.add_schemas('Custom', self.presets)
-        self.settings_window.add_schemas('Templates', self.templates)
+        self.settings_window.add_schemas('Custom', config.presets)
+        self.settings_window.add_schemas('Templates', config.templates)
 
     def set_window(self):
         # get zone the cursor is located within
@@ -95,9 +83,9 @@ class Application(Gtk.Application):
                     else:
                         self.state = State.CTRL_READY
             case State.SET_ZONE:
-                for i, name in self.settings['zonemap'].items():
+                for i, name in config.settings['zonemap'].items():
                     if keyboard.KeyCode.from_char(i) == key:
-                        self.zone_display_window.set_preset(self.presets.get(name, self.default_preset))
+                        self.zone_display_window.set_preset(config.presets.get(name, self.default_preset))
                         self.zone_display_window.show_all()
 
     def __key_release_callback(self, key):
@@ -144,9 +132,6 @@ class Application(Gtk.Application):
         # get screen interaction object
         self.screen = Wnck.Screen.get_default()
         self.screen.force_update()
-
-        # load css styles
-        Config('style.css').load()
 
     def do_activate(self):
         # Start the keyboard listener in its own thread
