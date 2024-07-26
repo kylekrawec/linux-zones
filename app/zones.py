@@ -6,7 +6,7 @@ from itertools import groupby, chain
 import shapely
 from shapely.geometry import LineString, Point
 from shapely.ops import linemerge, unary_union
-from typing import Tuple, Dict, List
+from typing import Tuple, Dict, List, Set
 
 gi.require_version('Gtk', '3.0')
 from gi.repository import Gtk, Gdk
@@ -86,59 +86,76 @@ class ZoneBoundary:
     """
     Represents a boundary formed by multiple ZoneEdge objects, allowing manipulation of their positions.
 
+    This class manages a set of ZoneEdge objects that together form a single boundary in the zone layout.
+    It provides methods for initializing, accessing, and manipulating the boundary's geometry and position.
+
     Attributes:
-        _edges (set): A set of ZoneEdge objects forming the edge.
-        axis (Axis): The axis (x or y) along which the edge is aligned.
-        center (Tuple): The center (x, y) coordinates of the boundary.
-        position (LineString): The (x1, y1) and (x2, y2) point coordinates of the boundary.
-        buffer (Geometry): A buffer surrounding the ZoneBoundary position. Must be set prior to use.
+        _edges (set): A set of ZoneEdge objects forming the boundary.
+        _axis (Axis): The axis (x or y) along which the boundary is aligned.
+        _position (LineString): The line representing the boundary's position.
+        _center (Point): The center point of the boundary.
+        _buffer (Geometry): A buffer area surrounding the boundary's position.
     """
 
     def __init__(self, edges: List[ZoneEdge]):
         """
         Initializes the ZoneBoundary with a list of ZoneEdge objects.
-        :param edges: A list of ZoneEdge objects forming the edge.
+
+        :param edges: A list of ZoneEdge objects forming the boundary.
         """
-        self._edges = set(edges)  # Stores set of ZoneEdge objects
+        self._edges = set(edges)
         self._axis = self._get_axis(self._edges)
         self._set_geometry_attributes()
 
     def _set_geometry_attributes(self):
+        """
+        Calculates and sets the geometric attributes of the boundary.
+
+        This method should be called whenever the boundary's position changes.
+        """
         self._position = self._get_position()
         self._center = self._get_center()
         self._buffer = self._get_buffer(config.settings.get('boundary-buffer-size'))
 
-    def _get_axis(self, edges: [ZoneEdge]) -> Axis:
+    def _get_axis(self, edges: Set[ZoneEdge]) -> Axis:
         """
         Determines the axis of the ZoneBoundary based on the provided edges.
-        :param edges: A list of ZoneEdge objects.
-        :return: The axis (x or y) of the edge.
+
+        :param edges: A set of ZoneEdge objects.
+        :return: The axis (x or y) of the boundary.
+        :raises AssertionError: If edges are not all on the same axis.
         """
-        axes = {edge.axis for edge in edges}  # Get the set of axes from the sides
+        axes = {edge.axis for edge in edges}
         assert len(axes) == 1, 'A ZoneBoundary must only contain ZoneEdges of the same axis. Either (LEFT, RIGHT) for X or (TOP, BOTTOM) for Y.'
-        return axes.pop()  # Return the single axis
+        return axes.pop()
 
     def _get_position(self) -> LineString:
         """
-        Sets the position attribute of the ZoneBoundary.
-        """
-        lines = [edge.position for edge in self._edges]  # Get positions of the edges
-        bounds = linemerge(lines).bounds  # Merge the lines and get the bounds
-        return LineString([(bounds[0], bounds[1]), (bounds[2], bounds[3])])  # Create a LineString from the bounds
+        Calculates the position of the ZoneBoundary as a LineString.
 
-    def _get_center(self) -> Tuple:
+        :return: A LineString representing the boundary's position.
         """
-        Sets the center attribute of the ZoneBoundary.
+        lines = [edge.position for edge in self._edges]
+        bounds = linemerge(lines).bounds
+        return LineString([(bounds[0], bounds[1]), (bounds[2], bounds[3])])
+
+    def _get_center(self) -> Point:
         """
-        minx, miny, maxx, maxy = self._position.bounds  # Get the bounds of the edge
-        center_x = (minx + maxx) / 2  # Calculate the center x-coordinate
-        center_y = (miny + maxy) / 2  # Calculate the center y-coordinate
-        return center_x, center_y
+        Calculates the center point of the ZoneBoundary.
+
+        :return: A Point representing the center of the boundary.
+        """
+        minx, miny, maxx, maxy = self._position.bounds
+        x = (minx + maxx) / 2
+        y = (miny + maxy) / 2
+        return Point(x, y)
 
     def _get_buffer(self, distance: int) -> shapely.buffer:
         """
-        Create a buffer around a boundary position that extends to the sides but not the ends.
-        :param distance: The buffer distance
+        Creates a buffer around the boundary's position that extends to the sides but not the ends.
+
+        :param distance: The buffer distance.
+        :return: A Shapely geometry representing the buffer area.
         """
         # Create normal buffer
         buffer = self._position.buffer(distance, cap_style=3)  # cap_style=3 for flat ends
@@ -154,27 +171,49 @@ class ZoneBoundary:
 
     @property
     def axis(self) -> Axis:
+        """The axis along which the boundary is aligned."""
         return self._axis
 
     @property
     def position(self) -> LineString:
+        """The LineString representing the boundary's position."""
         return self._position
 
     @property
-    def center(self) -> Tuple:
+    def center(self) -> Point:
+        """The center point of the boundary."""
         return self._center
 
     @property
     def buffer(self) -> shapely.buffer:
+        """The buffer area surrounding the boundary's position."""
         return self._buffer
 
+    def is_aligned(self, point: Point) -> bool:
+        """
+        Checks if a given point is aligned with the boundary's longest edge within the buffer distance.
+
+        :param point: The Point to check for alignment.
+        :return: True if the point is aligned, False otherwise.
+        """
+        spread = abs(point.y - self.center.y) if self.axis is Axis.x else abs(point.x - self.center.x)
+        return spread <= config.settings.get('boundary-buffer-size')
+
     def get_edges(self) -> List[ZoneEdge]:
+        """
+        Returns a list of all ZoneEdge objects that form this boundary.
+
+        :return: A list of ZoneEdge objects.
+        """
         return list(self._edges)
 
     def move_horizontal(self, position: int) -> None:
         """
-        Moves the edge horizontally to a new position.
-        :param position: Pixel value of a new position to move the edge.
+        Moves the boundary horizontally to a new position.
+
+        This method adjusts the width of adjacent zones when moving a vertical boundary.
+
+        :param position: New x-coordinate for the boundary.
         """
         if self.axis is Axis.y:
             for edge in self._edges:
@@ -191,8 +230,11 @@ class ZoneBoundary:
 
     def move_vertical(self, position: int) -> None:
         """
-        Moves the edge vertically to a new position.
-        :param position: Pixel value of a new position to move the edge.
+        Moves the boundary vertically to a new position.
+
+        This method adjusts the height of adjacent zones when moving a horizontal boundary.
+
+        :param position: New y-coordinate for the boundary.
         """
         if self.axis is Axis.x:
             for edge in self._edges:
