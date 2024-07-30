@@ -330,6 +330,7 @@ class ZoneEditorWindow(TransparentApplicationWindow):
         # Connect signals to handlers
         self._container.connect('size-allocate', self._on_container_allocation)
         self.connect('motion-notify-event', self._on_motion_notify)
+        self.connect('key-press-event', self._on_key_press_event)
         self.connect('key-press-event', self._on_key_event)
         self.connect('key-release-event', self._on_key_event)
         self.connect('button-press-event', self._on_button_press)
@@ -417,6 +418,13 @@ class ZoneEditorWindow(TransparentApplicationWindow):
             x, y = get_pointer_position()
             axis = Axis.x if self._zone_divider.axis is Axis.y else Axis.y
             self._set_zone_divider(x, y, axis)
+
+    def _on_key_press_event(self, widget, event):
+        # Check if Control is being held down
+        ctrl = (event.state & Gdk.ModifierType.CONTROL_MASK)
+        # Check for Ctrl+S hotkey
+        if ctrl and event.keyval == Gdk.KEY_s:
+            self._save_preset()
 
     def _on_button_press(self, widget, event) -> bool:
         """
