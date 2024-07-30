@@ -14,6 +14,7 @@ class SchemaDisplay(GtkStyleableMixin, Gtk.Box):
     def __init__(self, name: str, schema: [dict]):
         super().__init__()
         self.set_orientation(Gtk.Orientation.VERTICAL)
+        self.name = name
         self.schema = schema
         size = display.get_workarea().height * 0.1
 
@@ -38,7 +39,7 @@ class SchemaDisplay(GtkStyleableMixin, Gtk.Box):
         button.connect('button-press-event', self.__on_edit_button_click)
 
     def __on_edit_button_click(self, widget, event):
-        ZoneEditorWindow(self.schema).show_all()
+        ZoneEditorWindow(self.schema, self.name).show_all()
 
 
 class SchemaDisplayLayout(Gtk.FlowBox):

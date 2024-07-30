@@ -6,7 +6,7 @@ from itertools import groupby, chain
 import shapely
 from shapely.geometry import LineString, Point
 from shapely.ops import linemerge, unary_union
-from typing import Tuple, Dict, List, Set
+from typing import Optional, Tuple, Dict, List, Set
 
 gi.require_version('Gtk', '3.0')
 from gi.repository import Gtk, Gdk
@@ -363,13 +363,13 @@ class ZoneContainer(Gtk.Fixed):
     A container that holds multiple Zone objects, managing their positions and styles.
     """
 
-    def __init__(self, schemas: List[Dict]):
+    def __init__(self, schemas: List[Dict], _id: Optional[str] = None):
         """
         Initializes the ZoneContainer with a list of dicts representing schema data.
         :param schemas: A list of dicts representing schema data to initialize Zone objects.
         """
         super().__init__()
-
+        self.id = _id
         self._style_classes = None
         for i, schema in enumerate(schemas):
             zone = Zone(Schema(schema))

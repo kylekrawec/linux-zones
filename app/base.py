@@ -90,7 +90,34 @@ class Schema:
         r.height = self.height
         return r
 
-    def scale(self, width: int, height: int) -> None:
+    def get_scaled(self, width: int, height: int) -> 'Schema':
+        """
+        Get a scaled Schema from normalized coordinates to pixel coordinates.
+
+        :param width: The width to scale to.
+        :param height: The height to scale to.
+        :return: A new Schema with scaled coordinates.
+        :raises AssertionError: If the schema is not in normalized coordinates.
+        :raises ScalingFailureException: If scaling results in values less than or equal to 1.
+        """
+        assert self.is_normal, 'Cannot scale non-normalized bounds.'
+
+        new_schema = Schema({
+            'x': round(self.x * width),
+            'y': round(self.y * height),
+            'width': round(self.width * width),
+            'height': round(self.height * height),
+            'id': self.id
+        })
+
+        if any(getattr(new_schema, attr) < 1 for attr in ['width', 'height']):
+            raise ScalingFailureException(
+                f'{self.__class__} failed to be scaled. Ensure width and height values are greater than one.')
+
+        new_schema.is_normal = False
+        return new_schema
+
+    def scale(self, width: int, height: int):
         """
         Scale the schema from normalized coordinates to pixel coordinates.
 
@@ -99,17 +126,38 @@ class Schema:
         :raises AssertionError: If the schema is not in normalized coordinates.
         :raises ScalingFailureException: If scaling results in non-normal coordinates.
         """
-        assert self.is_normal, 'Cannot scale non-normalized bounds.'
-        self.x = round(self.x * width)
-        self.y = round(self.y * height)
-        self.width = round(self.width * width)
-        self.height = round(self.height * height)
+        new_schema = self.get_scaled(width, height)
+        self.x, self.y, self.width, self.height = new_schema.x, new_schema.y, new_schema.width, new_schema.height
+        self.is_normal = False
 
-        self.is_normal = all(0 <= i <= 1 for i in [self.x, self.y, self.width, self.height])
-        if self.is_normal:
-            raise ScalingFailureException(f'{self.__class__} failed to be scaled. Ensure width and height values are greater then one.')
+    def get_normalized(self, width: int, height: int) -> 'Schema':
+        """
+        Get a normalized Schema from pixel coordinates to 0-1 range.
 
-    def normalize(self, width: int, height: int) -> None:
+        :param width: The width to normalize against.
+        :param height: The height to normalize against.
+        :return: A new Schema with normalized coordinates.
+        :raises AssertionError: If the schema is already normalized or if width/height are invalid.
+        :raises NormalizationFailureException: If normalization results in out-of-range values.
+        """
+        assert not self.is_normal, 'Cannot normalize already normalized bounds.'
+        assert width > 0 and height > 0, 'Width and height must be greater than zero.'
+
+        new_schema = Schema({
+            'x': self.x / width,
+            'y': self.y / height,
+            'width': self.width / width,
+            'height': self.height / height,
+            'id': self.id
+        })
+
+        if not new_schema.is_normal:
+            raise NormalizationFailureException(
+                f'{self.__class__} failed to be normalized. Ensure width and height values are greater than schema width and height.')
+
+        return new_schema
+
+    def normalize(self, width: int, height: int):
         """
         Normalize the schema from pixel coordinates to 0-1 range.
 
@@ -118,17 +166,9 @@ class Schema:
         :raises AssertionError: If the schema is already normalized or if width/height are invalid.
         :raises NormalizationFailureException: If normalization results in out-of-range values.
         """
-        assert not self.is_normal, 'Cannot normalize normal bounds.'
-        assert width > 0 and height > 0, 'Width and height must be greater than zero.'
-
-        self.x = self.x / width
-        self.y = self.y / height
-        self.width = self.width / width
-        self.height = self.height / height
-
-        self.is_normal = all(0 <= i <= 1 for i in [self.x, self.y, self.width, self.height])
-        if not self.is_normal:
-            raise NormalizationFailureException(f'{self.__class__} failed to be normalized. Ensure width and height values are greater then schema width and height.')
+        new_schema = self.get_normalized(width, height)
+        self.x, self.y, self.width, self.height = new_schema.x, new_schema.y, new_schema.width, new_schema.height
+        self.is_normal = True
 
     @staticmethod
     def generate_id() -> str:

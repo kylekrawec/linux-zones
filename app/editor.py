@@ -288,7 +288,7 @@ class ZoneEditorWindow(TransparentApplicationWindow):
         _zone_divider (Line): A line widget representing the current zone division position.
     """
 
-    def __init__(self, schemas: List[Dict]):
+    def __init__(self, schemas: List[Dict], _id: Optional[str] = None):
         """
         Initializes the ZoneEditorWindow with a list of dicts representing schema data.
 
@@ -301,7 +301,7 @@ class ZoneEditorWindow(TransparentApplicationWindow):
         # Initialize attributes
         self._overlay = Gtk.Overlay()
         self._editor = Editor()
-        self._container = ZoneContainer(schemas)
+        self._container = ZoneContainer(schemas, _id)
         self._zone_divider = Line(0, 0, 0, 0)
 
         # Set child size requests
@@ -346,6 +346,15 @@ class ZoneEditorWindow(TransparentApplicationWindow):
         """
         zones = container.get_children()
         self._editor.set_zones(zones)
+
+    def _save_preset(self):
+        # Normalize zone schemas and collect dictionary representations
+        width, height = self._container.get_allocated_width(), self._container.get_allocated_height()
+        schemas = [zone.schema.get_normalized(width, height).__dict__() for zone in self._container.get_children()]
+        # Save preset
+        presets = config.presets
+        presets[self._container.id] = schemas
+        config.save(presets, 'presets.json')
 
     def _set_zone_divider(self, x: float, y: float, axis: Optional[Axis] = None):
         """
