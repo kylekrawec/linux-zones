@@ -8,5 +8,6 @@
     "6": "six-zones"
   },
   "default_preset": "center-right-bias",
-  "boundary-buffer-size": 100
+  "boundary-buffer-size": 100,
+  "resource-prefix": "/org/linuxzones/app"
 }

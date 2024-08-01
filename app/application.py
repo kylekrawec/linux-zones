@@ -1,7 +1,8 @@
+import os
 import gi
 gi.require_version('Gtk', '3.0')
 gi.require_version('Wnck', '3.0')
-from gi.repository import Gtk, GLib, Wnck
+from gi.repository import Gtk, GLib, Gio, Wnck
 
 import sys
 from pynput import keyboard, mouse
@@ -25,11 +26,8 @@ class Application(Gtk.Application):
         # Default settings
         self.default_preset = config.presets.get(config.settings.get('default_preset'))
 
-        # Create application windows
-        self.zone_display_window = ZoneDisplayWindow(self.default_preset)
-        self.settings_window = SettingsWindow()
-        self.settings_window.add_schemas('Custom', config.presets)
-        self.settings_window.add_schemas('Templates', config.templates)
+        self.zone_display_window = None
+        self.settings_window = None
 
     def set_window(self):
         # get zone the cursor is located within
@@ -129,6 +127,11 @@ class Application(Gtk.Application):
     def do_startup(self):
         Gtk.Application.do_startup(self)
 
+        # Load and register app resources
+        resource_path = os.path.abspath('resources/app.gresource')
+        resource = Gio.Resource.load(resource_path)
+        Gio.resources_register(resource)
+
         # get screen interaction object
         self.screen = Wnck.Screen.get_default()
         self.screen.force_update()
@@ -148,7 +151,16 @@ class Application(Gtk.Application):
         })
         hotkey_listener.start()
 
-        Gtk.ApplicationWindow(application=self)
+        # Create application windows if they don't exist
+        if not self.zone_display_window:
+            self.zone_display_window = ZoneDisplayWindow(self.default_preset)
+            self.zone_display_window.set_application(self)
+
+        if not self.settings_window:
+            self.settings_window = SettingsWindow()
+            self.settings_window.set_application(self)
+            self.settings_window.add_schemas('Custom', config.presets)
+            self.settings_window.add_schemas('Templates', config.templates)
 
 
 if __name__ == "__main__":
