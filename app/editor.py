@@ -3,7 +3,7 @@ from typing import Optional, Tuple, Dict, List
 from shapely.geometry import Point
 import gi
 gi.require_version('Gtk', '3.0')
-from gi.repository import Gtk, Gdk
+from gi.repository import Gtk, Gdk, GObject
 
 
 from config import config
@@ -157,19 +157,19 @@ class Editor(Gtk.Layout):
         :param event: The motion event object.
         """
         cursor = Point(event.x, event.y)
-        boundary = self.get_nearest_boundary(cursor)
-        point = self.get_boundpoint(boundary)
+        if boundary := self.get_nearest_boundary(cursor):
+            point = self.get_boundpoint(boundary)
 
-        if cursor.intersects(boundary.buffer):
-            new_position = {
-                Axis.y: (boundary.center.x, cursor.y),
-                Axis.x: (cursor.x, boundary.center.y)
-            }[boundary.axis]
+            if cursor.intersects(boundary.buffer):
+                new_position = {
+                    Axis.y: (boundary.center.x, cursor.y),
+                    Axis.x: (cursor.x, boundary.center.y)
+                }[boundary.axis]
 
-            self.move(point, *new_position)
-            self._set_visible_point(point)
-        else:
-            self._set_visible_point(None)
+                self.move(point, *new_position)
+                self._set_visible_point(point)
+            else:
+                self._set_visible_point(None)
 
     def _on_boundary_drag(self, widget: Gtk.Widget, context: Gdk.DragContext, x: int, y: int, time: int) -> bool:
         """
@@ -226,7 +226,7 @@ class Editor(Gtk.Layout):
         """
         return self._boundary_point_map[Axis.x].get(boundary) or self._boundary_point_map[Axis.y].get(boundary)
 
-    def get_nearest_boundary(self, point: Point, axis: Optional[Axis] = None) -> ZoneBoundary:
+    def get_nearest_boundary(self, point: Point, axis: Optional[Axis] = None) -> Optional[ZoneBoundary]:
         """
         Finds the nearest ZoneBoundary to a given point.
 
@@ -235,7 +235,7 @@ class Editor(Gtk.Layout):
         :return: The nearest ZoneBoundary.
         """
         boundaries = self._boundary_point_map[axis].keys() or self.boundaries if axis else self.boundaries
-        return min(boundaries, key=lambda boundary: point.distance(boundary.position))
+        return None if not boundaries else min(boundaries, key=lambda boundary: point.distance(boundary.position))
 
     @staticmethod
     def create_boundaries(zones: List[Zone]) -> List[ZoneBoundary]:
@@ -286,7 +286,14 @@ class ZoneEditorWindow(TransparentApplicationWindow):
         _editor (Editor): An editor widget for managing BoundPoints and zone boundaries.
         _container (ZoneContainer): A container holding Zone objects.
         _zone_divider (Line): A line widget representing the current zone division position.
+
+    Signals:
+        preset-save (GObject.TYPE_PYOBJECT): Emitted when a preset is saved. The signal includes the entire updated preset dictionary.
     """
+
+    __gsignals__ = {
+        'preset-save': (GObject.SignalFlags.RUN_FIRST, None, (GObject.TYPE_PYOBJECT,)),
+    }
 
     def __init__(self, schemas: List[Dict], _id: Optional[str] = None):
         """
@@ -349,13 +356,21 @@ class ZoneEditorWindow(TransparentApplicationWindow):
         self._editor.set_zones(zones)
 
     def _save_preset(self):
-        # Normalize zone schemas and collect dictionary representations
+        """
+        Saves the current zone configuration as a preset.
+
+        Normalizes zone schemas based on container dimensions, saves them to the presets
+        configuration using the container's ID as the key, and emits a 'preset-save' signal.
+
+        Signals:
+            preset-save: Emitted with updated presets dictionary.
+        """
         width, height = self._container.get_allocated_width(), self._container.get_allocated_height()
         schemas = [zone.schema.get_normalized(width, height).__dict__() for zone in self._container.get_children()]
-        # Save preset
         presets = config.presets
         presets[self._container.id] = schemas
         config.save(presets, 'presets.json')
+        self.emit('preset-save', config.presets)
 
     def _set_zone_divider(self, x: float, y: float, axis: Optional[Axis] = None):
         """
@@ -376,7 +391,7 @@ class ZoneEditorWindow(TransparentApplicationWindow):
 
         # Snap divider position if within proximity to an existing boundary
         boundary = self._editor.get_nearest_boundary(cursor, axis)
-        position = boundary.center if boundary.is_aligned(cursor) else cursor
+        position = boundary.center if boundary is not None and boundary.is_aligned(cursor) else cursor
 
         # Set the position of the zone divider vertically or horizontally
         x1, y1, x2, y2 = {
@@ -441,7 +456,7 @@ class ZoneEditorWindow(TransparentApplicationWindow):
         cursor = Point(event.x, event.y)
         boundary = self._editor.get_nearest_boundary(cursor, self._zone_divider.axis)
         # Divide zone if cursor does not intersect any boundary buffer.
-        if event.button == Gdk.BUTTON_PRIMARY and not cursor.intersects(boundary.buffer):
+        if event.button == Gdk.BUTTON_PRIMARY and (not boundary or not cursor.intersects(boundary.buffer)):
             zone = self._container.get_zone(event.x, event.y)
             self._container.divide(zone, self._zone_divider)
         return True
@@ -455,3 +470,5 @@ class ZoneEditorWindow(TransparentApplicationWindow):
         """
         super().show_all()
         self.present()
+
+GObject.type_register(ZoneEditorWindow)

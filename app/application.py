@@ -158,9 +158,6 @@ class Application(Gtk.Application):
 
         if not self.settings_window:
             self.settings_window = SettingsWindow()
-            self.settings_window.set_application(self)
-            self.settings_window.add_schemas('Custom', config.presets)
-            self.settings_window.add_schemas('Templates', config.templates)
 
 
 if __name__ == "__main__":

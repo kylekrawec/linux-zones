@@ -1,5 +1,5 @@
 {
-    "center-bias": [
+    "Center Bias": [
         {
             "x": 0,
             "y": 0,
@@ -22,7 +22,7 @@
             "id": "7959c950b20e3e390a9f1faf97990264"
         }
     ],
-    "center-right-bias": [
+    "Center Right Bias": [
         {
             "x": 0,
             "y": 0,
@@ -45,7 +45,7 @@
             "id": "dfeb7050be44dcff176dd1d3c4988763"
         }
     ],
-    "right-bias": [
+    "Right Bias": [
         {
             "x": 0,
             "y": 0,
@@ -61,7 +61,7 @@
             "id": "c0120fa1103016c48ab6bf788d73c3fa"
         }
     ],
-    "thirds": [
+    "Thirds": [
         {
             "x": 0,
             "y": 0,
@@ -84,7 +84,7 @@
             "id": "9b4f2f85d010c3ceb5f1b1f4634218ee"
         }
     ],
-    "quarters": [
+    "Quarters": [
         {
             "x": 0,
             "y": 0,
@@ -114,7 +114,7 @@
             "id": "75cc80d8eb8f3245fea14607534023f3"
         }
     ],
-    "six-zones": [
+    "Six Zones": [
         {
             "x": 0,
             "y": 0,
