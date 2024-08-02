@@ -1,12 +1,13 @@
 {
   "zonemap": {
-    "0": "center-bias",
-    "1": "center-right-bias",
-    "2": "right-bias",
-    "3": "thirds",
-    "4": "quarters",
-    "6": "six-zones"
+    "0": "Center Bias",
+    "1": "Center Right Bias",
+    "2": "Right Bias",
+    "3": "Thirds",
+    "4": "Quarters",
+    "6": "Six Zones"
   },
-  "default_preset": "center-right-bias",
-  "boundary-buffer-size": 100
+  "default_preset": "Center Right Bias",
+  "boundary-buffer-size": 100,
+  "resource-prefix": "/org/linuxzones/app"
 }

@@ -1,8 +1,9 @@
 import cairo
 import gi
 gi.require_version('Gtk', '3.0')
-from gi.repository import Gtk, GObject
+from gi.repository import Gtk, GObject, GdkPixbuf, Gdk, GLib
 
+from config import config
 from base import Axis
 
 
@@ -64,3 +65,68 @@ class Line(Gtk.DrawingArea):
 
 # Register the custom widget type
 GObject.type_register(Line)
+
+
+class IconButton(Gtk.Button):
+    """
+    A custom Gtk.Button that displays an icon.
+
+    This button loads an icon resource and displays it. The icon
+    is automatically scaled when the button is resized.
+    """
+
+    def __init__(self, resource: str):
+        """
+        Initialize the IconButton.
+
+        :param resource: The name of the icon resource file (including the file extension)
+        """
+        super().__init__()
+
+        self.resource = resource
+        self._pixbuf = None
+
+        self._load_resource()
+
+        # Configure button appearance
+        self.set_relief(Gtk.ReliefStyle.NONE)
+        self.set_property("can-focus", False)
+        self.set_valign(Gtk.Align.CENTER)
+        self.set_halign(Gtk.Align.CENTER)
+
+        # Connect the size-allocate signal
+        self._size_allocate_handler_id = self.connect('size-allocate', self._on_size_allocate)
+
+    def _load_resource(self):
+        """
+        Load the icon resource into the pixbuf.
+        """
+        path = f'{config.settings.get("resource-prefix")}/{self.resource}'
+        try:
+            self._pixbuf = GdkPixbuf.Pixbuf.new_from_resource(path)
+        except GLib.Error as e:
+            print(f"Error loading resource: {e}")
+            # Set a default "missing image" pixbuf
+            self._pixbuf = GdkPixbuf.Pixbuf.new(GdkPixbuf.Colorspace.RGB, True, 8, 24, 24)
+            self._pixbuf.fill(0xFF0000FF)  # Fill with red color
+
+    def _on_size_allocate(self, widget: Gtk.Widget, allocation: Gdk.Rectangle):
+        """
+        Handle the size-allocate signal.
+
+        This method is called when the button is allocated a new size. It scales
+        the icon to fit the new size and updates the button's image.
+
+        :param widget: The widget that received the signal (self)
+        :param allocation: The new allocation for the button
+        """
+        scaled_buf = self._pixbuf.scale_simple(
+            allocation.width,
+            allocation.height,
+            GdkPixbuf.InterpType.BILINEAR
+        )
+        image = Gtk.Image.new_from_pixbuf(scaled_buf)
+        self.set_image(image)
+
+        # Disconnect handler after initial allocation.
+        self.disconnect(self._size_allocate_handler_id)
