@@ -355,6 +355,46 @@ class ZoneEditorWindow(TransparentApplicationWindow):
         zones = container.get_children()
         self._editor.set_zones(zones)
 
+    def close(self):
+        """
+        Handle the closing of the window with a save/discard/cancel dialog.
+
+        This method creates a dialog asking the user if they want to save changes
+        before closing. Based on the user's response, it either closes the window
+        without saving, saves changes and then closes, or cancels the close operation.
+        """
+        # Create a warning message dialog
+        dialog = Gtk.MessageDialog(
+            message_type=Gtk.MessageType.WARNING,
+            buttons=Gtk.ButtonsType.NONE,
+            text="Do you want to save changes before closing?"
+        )
+        dialog.format_secondary_text(
+            "Your changes will be lost if you don't save them."
+        )
+
+        # Add custom buttons to the dialog
+        dialog.add_button("Close without Saving", Gtk.ResponseType.NO)
+        dialog.add_button(Gtk.STOCK_CANCEL, Gtk.ResponseType.CANCEL)
+        dialog.add_button(Gtk.STOCK_SAVE, Gtk.ResponseType.YES)
+
+        # Set the default response to 'Save'
+        dialog.set_default_response(Gtk.ResponseType.YES)
+
+        # Handle the user's response
+        match dialog.run():
+            case Gtk.ResponseType.NO:
+                # Close without saving
+                super().close()
+            case Gtk.ResponseType.YES:
+                # Save changes and then close
+                self._save_preset()
+                super().close()
+            # Note: CANCEL case is implicitly handled by doing nothing
+
+        # Clean up the dialog
+        dialog.destroy()
+
     def _save_preset(self):
         """
         Saves the current zone configuration as a preset.
@@ -435,11 +475,8 @@ class ZoneEditorWindow(TransparentApplicationWindow):
             self._set_zone_divider(x, y, axis)
 
     def _on_key_press_event(self, widget, event):
-        # Check if Control is being held down
-        ctrl = (event.state & Gdk.ModifierType.CONTROL_MASK)
-        # Check for Ctrl+S hotkey
-        if ctrl and event.keyval == Gdk.KEY_s:
-            self._save_preset()
+        if event.keyval == Gdk.KEY_Return:
+            self.close()
 
     def _on_button_press(self, widget, event) -> bool:
         """
