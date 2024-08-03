@@ -9,7 +9,7 @@ import display
 from base import GtkStyleableMixin
 from zones import ZoneContainer
 from editor import ZoneEditorWindow
-from widgets import IconButton
+from widgets import IconButton, DropDownMenu
 from config import config
 
 
@@ -51,12 +51,12 @@ class SchemaDisplay(GtkStyleableMixin, Gtk.Box):
         """Create and add the header with title and edit button."""
         self.header = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
         title = Gtk.Label(label=self.name)
-        edit_button = Gtk.Button(label="edit")
-
+        # Create dropdown menu to display multiple actions
+        menu = DropDownMenu('dots.svg')
+        menu.add_item('Edit', 'edit.svg', self._on_edit_button)
+        # Populate header
         self.header.pack_start(title, expand=False, fill=False, padding=0)
-        self.header.pack_end(edit_button, expand=False, fill=False, padding=0)
-
-        edit_button.connect('clicked', self._on_edit_button_click)
+        self.header.pack_end(menu, expand=False, fill=False, padding=0)
 
         self.add(self.header)
 
@@ -72,7 +72,7 @@ class SchemaDisplay(GtkStyleableMixin, Gtk.Box):
         self.header.get_style_context().add_class('preset-display-box-header')
         self.add_style_class('preset-display-box')
 
-    def _on_edit_button_click(self, button):
+    def _on_edit_button(self, button):
         """
         Handle edit button click event.
 
@@ -130,8 +130,7 @@ class SchemaDisplayLayout(Gtk.FlowBox):
 
     def _add_new_preset_button(self):
         """Add a button for creating new presets."""
-        new_preset_btn = IconButton('plus-sign.svg')
-        new_preset_btn.set_size_request(50, 50)
+        new_preset_btn = IconButton('plus-sign.svg', Gtk.IconSize.DND)
         new_preset_btn.connect('clicked', self._on_new_preset_click)
         self.add(new_preset_btn)
         self._new_preset_btn = new_preset_btn  # Store reference to button

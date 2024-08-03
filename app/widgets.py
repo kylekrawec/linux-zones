@@ -1,10 +1,10 @@
 import cairo
 import gi
 gi.require_version('Gtk', '3.0')
-from gi.repository import Gtk, GObject, GdkPixbuf, Gdk, GLib
+from gi.repository import Gtk, GObject, GdkPixbuf, Gdk, GLib, Gio
 
 from config import config
-from base import Axis
+from base import Axis, create_icon
 
 
 class Line(Gtk.DrawingArea):
@@ -72,61 +72,96 @@ class IconButton(Gtk.Button):
     A custom Gtk.Button that displays an icon.
 
     This button loads an icon resource and displays it. The icon
-    is automatically scaled when the button is resized.
+    is automatically scaled when the button is resized. The button
+    has no relief (flat appearance) and doesn't receive keyboard focus.
     """
 
-    def __init__(self, resource: str):
+    def __init__(self, resource: str, size: Gtk.IconSize):
         """
         Initialize the IconButton.
 
         :param resource: The name of the icon resource file (including the file extension)
+        :param size: The size of the icon, specified as a Gtk.IconSize enum value
         """
         super().__init__()
 
-        self.resource = resource
-        self._pixbuf = None
-
-        self._load_resource()
+        # Create and set the icon image
+        icon = create_icon(resource, size)
+        self.set_image(icon)
 
         # Configure button appearance
-        self.set_relief(Gtk.ReliefStyle.NONE)
-        self.set_property("can-focus", False)
-        self.set_valign(Gtk.Align.CENTER)
-        self.set_halign(Gtk.Align.CENTER)
+        self.set_relief(Gtk.ReliefStyle.NONE)  # Make the button flat (no visible border)
+        self.set_property("can-focus", False)  # Prevent the button from receiving keyboard focus
+        self.set_valign(Gtk.Align.CENTER)  # Center the button vertically within its allocated space
+        self.set_halign(Gtk.Align.CENTER)  # Center the button horizontally within its allocated space
 
-        # Connect the size-allocate signal
-        self._size_allocate_handler_id = self.connect('size-allocate', self._on_size_allocate)
 
-    def _load_resource(self):
+class DropDownMenu(Gtk.Button):
+    """
+    A custom Gtk.Button that displays a drop-down menu when clicked.
+
+    This button creates a menu that can be populated with items, each containing
+    an icon and a label. The menu appears below the button when it's clicked.
+    """
+
+    def __init__(self, resource: str):
         """
-        Load the icon resource into the pixbuf.
+        Initialize the DropDownMenu.
+
+        :param resource: The name of the icon resource file for the button
         """
-        path = f'{config.settings.get("resource-prefix")}/{self.resource}'
-        try:
-            self._pixbuf = GdkPixbuf.Pixbuf.new_from_resource(path)
-        except GLib.Error as e:
-            print(f"Error loading resource: {e}")
-            # Set a default "missing image" pixbuf
-            self._pixbuf = GdkPixbuf.Pixbuf.new(GdkPixbuf.Colorspace.RGB, True, 8, 24, 24)
-            self._pixbuf.fill(0xFF0000FF)  # Fill with red color
+        super().__init__()
+        self.menu = Gtk.Menu()
 
-    def _on_size_allocate(self, widget: Gtk.Widget, allocation: Gdk.Rectangle):
+        # Add menu icon
+        icon = create_icon(resource)
+        self.set_image(icon)
+
+        self.connect_object('button-press-event', self._on_pop_menu, self.menu)
+
+    def _on_pop_menu(self, widget, event):
         """
-        Handle the size-allocate signal.
+        Display the menu when the button is clicked.
 
-        This method is called when the button is allocated a new size. It scales
-        the icon to fit the new size and updates the button's image.
-
-        :param widget: The widget that received the signal (self)
-        :param allocation: The new allocation for the button
+        :param widget: The widget that triggered the event
+        :param event: The event object
         """
-        scaled_buf = self._pixbuf.scale_simple(
-            allocation.width,
-            allocation.height,
-            GdkPixbuf.InterpType.BILINEAR
-        )
-        image = Gtk.Image.new_from_pixbuf(scaled_buf)
-        self.set_image(image)
+        widget.popup(None, None, None, None, event.button, event.time)
 
-        # Disconnect handler after initial allocation.
-        self.disconnect(self._size_allocate_handler_id)
+    def _create_menu_item_with_icon(self, name: str, resource: str) -> Gtk.MenuItem:
+        """
+        Create a menu item with an icon and label.
+
+        :param name: The text label for the menu item
+        :param resource: The name of the icon resource file for the menu item
+        :return: A Gtk.MenuItem with the specified icon and label
+        """
+        # Create a box to hold the icon and label
+        box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=0)
+
+        # Create the icon
+        image = create_icon(resource)
+        box.pack_start(image, False, False, 10)
+
+        # Create the label
+        label_widget = Gtk.Label(label=name)
+        box.pack_start(label_widget, False, False, 0)
+
+        # Create the MenuItem and add the box
+        menu_item = Gtk.MenuItem()
+        menu_item.add(box)
+
+        return menu_item
+
+    def add_item(self, name: str, resource: str, callback):
+        """
+        Add an item to the drop-down menu.
+
+        :param name: The text label for the menu item
+        :param resource: The name of the icon resource file for the menu item
+        :param callback: The function to be called when the menu item is activated
+        """
+        menu_item = self._create_menu_item_with_icon(name, resource)
+        self.menu.append(menu_item)
+        menu_item.connect('activate', callback)
+        menu_item.show_all()

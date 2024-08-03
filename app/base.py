@@ -1,14 +1,15 @@
 import gi
 import hashlib
 import random
-from typing import Union
+from typing import Optional, Union
 from enum import Enum
 from shapely.geometry import LineString
 from abc import ABC
 
 gi.require_version('Gtk', '3.0')
-from gi.repository import Gtk, Gdk
+from gi.repository import Gtk, Gdk, Gio
 
+from config import config
 from exceptions import NormalizationFailureException, ScalingFailureException
 
 
@@ -32,6 +33,28 @@ class Side(Enum):
     BOTTOM = 1
     LEFT = 2
     RIGHT = 3
+
+
+def create_icon(resource_filename: str, size: Optional[Gtk.IconSize] = Gtk.IconSize.BUTTON) -> Gtk.Image:
+    """
+    Create a Gtk.Image from a resource file.
+
+    This function loads an icon from a resource file and creates a Gtk.Image
+    object with the specified size. The resource file should be located in
+    the directory specified by the 'resource-prefix' setting in the config.
+
+    :param resource_filename: The name of the icon resource file
+    :param size: The size of the icon, defaults to Gtk.IconSize.BUTTON
+    :return: A Gtk.Image object containing the loaded icon
+    :raises Gio.Error: If the resource file cannot be found or loaded
+    """
+    # Construct the resource URI
+    uri = f"resource://{config.settings.get('resource-prefix')}/{resource_filename}"
+    # Create an icon
+    file = Gio.File.new_for_uri(uri)
+    icon = Gio.FileIcon.new(file)
+    # Create and return a Gtk.Image from the icon
+    return Gtk.Image.new_from_gicon(icon, size)
 
 
 class Schema:
