@@ -2,5 +2,8 @@
 <gresources>
   <gresource prefix="/org/linuxzones/app">
     <file>plus-sign.svg</file>
+    <file>edit.svg</file>
+    <file>dots.svg</file>
+    <file>trash.svg</file>
   </gresource>
 </gresources>

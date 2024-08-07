@@ -3,13 +3,13 @@ from typing import Optional, Dict, List
 
 gi.require_version('Gtk', '3.0')
 
-from gi.repository import Gtk
+from gi.repository import Gtk, GObject
 
 import display
 from base import GtkStyleableMixin
 from zones import ZoneContainer
 from editor import ZoneEditorWindow
-from widgets import IconButton
+from widgets import IconButton, DropDownMenu
 from config import config
 
 
@@ -27,6 +27,10 @@ class SchemaDisplay(GtkStyleableMixin, Gtk.Box):
         header (Gtk.Box): The header container for the title and edit button.
         _container (ZoneContainer): The container displaying the schema layout.
     """
+
+    __gsignals__ = {
+        'reload-layout': (GObject.SignalFlags.RUN_FIRST, None, (GObject.TYPE_PYOBJECT,)),
+    }
 
     def __init__(self, name: str, schema: List[Dict]):
         """
@@ -51,12 +55,13 @@ class SchemaDisplay(GtkStyleableMixin, Gtk.Box):
         """Create and add the header with title and edit button."""
         self.header = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
         title = Gtk.Label(label=self.name)
-        edit_button = Gtk.Button(label="edit")
-
+        # Create dropdown menu to display multiple actions
+        menu = DropDownMenu('dots.svg')
+        menu.add_item('Edit', 'edit.svg', self._on_edit_button)
+        menu.add_item('Delete', 'trash.svg', self._on_delete_button)
+        # Populate header
         self.header.pack_start(title, expand=False, fill=False, padding=0)
-        self.header.pack_end(edit_button, expand=False, fill=False, padding=0)
-
-        edit_button.connect('clicked', self._on_edit_button_click)
+        self.header.pack_end(menu, expand=False, fill=False, padding=0)
 
         self.add(self.header)
 
@@ -72,7 +77,7 @@ class SchemaDisplay(GtkStyleableMixin, Gtk.Box):
         self.header.get_style_context().add_class('preset-display-box-header')
         self.add_style_class('preset-display-box')
 
-    def _on_edit_button_click(self, button):
+    def _on_edit_button(self, button):
         """
         Handle edit button click event.
 
@@ -81,6 +86,16 @@ class SchemaDisplay(GtkStyleableMixin, Gtk.Box):
         editor = ZoneEditorWindow(self.schema, self.name)
         editor.connect('preset-save', self._on_preset_save)
         editor.show_all()
+
+    def _on_delete_button(self, button):
+        """
+       Handle delete button click event.
+
+       :param button: The button that was clicked.
+       """
+        del config.presets[self.name]
+        config.save(config.presets, 'presets.json')
+        self.emit('reload-layout', config.presets)
 
     def _on_preset_save(self, editor: ZoneEditorWindow, schemas: List[Dict]):
         """
@@ -126,12 +141,13 @@ class SchemaDisplayLayout(Gtk.FlowBox):
     def _add_schema_displays(self):
         """Add SchemaDisplay widgets for each schema."""
         for name, schema in self.schemas.items():
-            self.add(SchemaDisplay(name, schema))
+            display = SchemaDisplay(name, schema)
+            display.connect('reload-layout', self._on_preset_update)
+            self.add(display)
 
     def _add_new_preset_button(self):
         """Add a button for creating new presets."""
-        new_preset_btn = IconButton('plus-sign.svg')
-        new_preset_btn.set_size_request(50, 50)
+        new_preset_btn = IconButton('plus-sign.svg', Gtk.IconSize.DND)
         new_preset_btn.connect('clicked', self._on_new_preset_click)
         self.add(new_preset_btn)
         self._new_preset_btn = new_preset_btn  # Store reference to button
@@ -141,7 +157,7 @@ class SchemaDisplayLayout(Gtk.FlowBox):
         empty_schema = [{'x': 0, 'y': 0, 'width': 1, 'height': 1}]  # Single zone covering entire workarea
         if name := self._get_preset_name():
             editor = ZoneEditorWindow(empty_schema, name)
-            editor.connect('preset-save', self._on_preset_save)
+            editor.connect('preset-save', self._on_preset_update)
             editor.show_all()
 
     def _get_preset_name(self) -> Optional[str]:
@@ -173,14 +189,14 @@ class SchemaDisplayLayout(Gtk.FlowBox):
         dialog.destroy()
         return name
 
-    def _on_preset_save(self, editor: ZoneEditorWindow, new_schemas: Dict[str, List[Dict]]):
+    def _on_preset_update(self, widget, updated_schemas: Dict[str, List[Dict]]):
         """
-        Handle preset save event from the editor and updates displayed schemas.
+        Handle any preset update event from a widget to update a display layout.
 
-        :param editor: The ZoneEditorWindow that emitted the event.
-        :param new_schemas: The updated schemas.
+        :param widget: The Gtk.Widget that emitted the event.
+        :param updated_schemas: The updated schemas.
         """
-        self.schemas = new_schemas
+        self.schemas = updated_schemas
         self._clear()
         self._build_ui()
 
