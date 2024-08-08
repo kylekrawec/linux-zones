@@ -11,11 +11,11 @@ from typing import Optional, Tuple, Dict, List, Set
 gi.require_version('Gtk', '3.0')
 from gi.repository import Gtk, Gdk
 
-from config import config
-from widgets import Line
-from display import get_workarea
-from base import Axis, Side, AbstractRectangleSide, Schema, TransparentApplicationWindow
-from base import GtkStyleableMixin, SchemableMixin
+from .config import config
+from .widgets import Line
+from .display import get_workarea
+from .base import Axis, Side, AbstractRectangleSide, Schema, TransparentApplicationWindow
+from .base import GtkStyleableMixin, SchemableMixin
 
 
 class Zone(Gtk.Box, SchemableMixin, GtkStyleableMixin):

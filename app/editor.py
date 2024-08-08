@@ -6,11 +6,11 @@ gi.require_version('Gtk', '3.0')
 from gi.repository import Gtk, Gdk, GObject
 
 
-from config import config
-from display import get_pointer_position, get_workarea
-from base import Axis, Side, TransparentApplicationWindow
-from zones import Zone, ZoneBoundary, ZoneContainer, RectangleSideGraph
-from widgets import Line
+from .config import config
+from .display import get_pointer_position, get_workarea
+from .base import Axis, Side, TransparentApplicationWindow
+from .zones import Zone, ZoneBoundary, ZoneContainer, RectangleSideGraph
+from .widgets import Line
 
 
 class BoundPoint(Gtk.Button):

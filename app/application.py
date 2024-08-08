@@ -1,17 +1,16 @@
 import os
+
 import gi
 gi.require_version('Gtk', '3.0')
 gi.require_version('Wnck', '3.0')
 from gi.repository import Gtk, GLib, Gio, Wnck
-
-import sys
 from pynput import keyboard, mouse
 
-from base import State
-from zones import ZoneDisplayWindow
-from display import get_workarea
-from config import config
-from settings import SettingsWindow
+from .base import State
+from .zones import ZoneDisplayWindow
+from .display import get_workarea
+from .config import config
+from .settings import SettingsWindow
 
 
 class Application(Gtk.Application):
@@ -158,8 +157,3 @@ class Application(Gtk.Application):
 
         if not self.settings_window:
             self.settings_window = SettingsWindow()
-
-
-if __name__ == "__main__":
-    app = Application()
-    app.run(sys.argv)

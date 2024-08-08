@@ -1,10 +1,9 @@
 import cairo
 import gi
 gi.require_version('Gtk', '3.0')
-from gi.repository import Gtk, GObject, GdkPixbuf, Gdk, GLib, Gio
+from gi.repository import Gtk, GObject
 
-from config import config
-from base import Axis, create_icon
+from .base import Axis, create_icon
 
 
 class Line(Gtk.DrawingArea):

@@ -5,12 +5,12 @@ gi.require_version('Gtk', '3.0')
 
 from gi.repository import Gtk, GObject
 
-import display
-from base import GtkStyleableMixin
-from zones import ZoneContainer
-from editor import ZoneEditorWindow
-from widgets import IconButton, DropDownMenu
-from config import config
+from .display import get_workarea
+from .base import GtkStyleableMixin
+from .zones import ZoneContainer
+from .editor import ZoneEditorWindow
+from .widgets import IconButton, DropDownMenu
+from .config import config
 
 
 class SchemaDisplay(GtkStyleableMixin, Gtk.Box):
@@ -67,7 +67,7 @@ class SchemaDisplay(GtkStyleableMixin, Gtk.Box):
 
     def _create_container(self):
         """Create and add the ZoneContainer."""
-        size = int(display.get_workarea().height * 0.1)
+        size = int(get_workarea().height * 0.1)
         self._container = ZoneContainer(self.schema).add_zone_style_class('preset-display-pane')
         self._container.set_size_request(size, size)
         self.add(self._container)
@@ -225,7 +225,7 @@ class SettingsWindow(Gtk.ApplicationWindow):
 
     def _configure_window(self):
         """Configure window size and position."""
-        workarea = display.get_workarea()
+        workarea = get_workarea()
         height = int(workarea.height * 0.5)
         width = int(height * 16 / 9)  # 16:9 aspect ratio
 

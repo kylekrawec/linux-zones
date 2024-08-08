@@ -9,8 +9,8 @@ from abc import ABC
 gi.require_version('Gtk', '3.0')
 from gi.repository import Gtk, Gdk, Gio
 
-from config import config
-from exceptions import NormalizationFailureException, ScalingFailureException
+from .config import config
+from .exceptions import NormalizationFailureException, ScalingFailureException
 
 
 class State(Enum):
