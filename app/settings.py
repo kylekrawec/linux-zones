@@ -223,6 +223,9 @@ class SettingsWindow(Gtk.ApplicationWindow):
         self._configure_window()
         self._build_ui()
 
+        # Connect the delete-event to hide the window instead of destroying it
+        self.connect("delete-event", self.on_delete_event)
+
     def _configure_window(self):
         """Configure window size and position."""
         workarea = get_workarea()
@@ -267,3 +270,9 @@ class SettingsWindow(Gtk.ApplicationWindow):
 
         self.layout.pack_start(header_box, expand=False, fill=False, padding=0)
         self.layout.pack_start(SchemaDisplayLayout(schemas), expand=True, fill=True, padding=0)
+
+    def on_delete_event(self, widget, event):
+        # Hide the window instead of destroying it
+        self.hide()
+        # End termination procedure to prevent GTK from destroying the window
+        return True
