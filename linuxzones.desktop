@@ -1,0 +1,14 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=LinuxZones
+GenericName=Window Manager
+Comment=Snap windows to predefined zones.
+Exec=python3 /usr/bin/linuxzones
+Icon=linuxzones
+Terminal=false
+Categories=Utility;
+Keywords=window;manager;zones;
+Hidden=false
+NoDisplay=false
+X-GNOME-Autostart-enabled=true
