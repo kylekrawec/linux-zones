@@ -3,7 +3,8 @@ import os
 import gi
 gi.require_version('Gtk', '3.0')
 gi.require_version('Wnck', '3.0')
-from gi.repository import Gtk, GLib, Gio, Wnck
+gi.require_version('AppIndicator3', '0.1')
+from gi.repository import Gtk, GLib, Gio, Wnck, AppIndicator3
 from pynput import keyboard, mouse
 
 from .base import State
@@ -27,6 +28,7 @@ class Application(Gtk.Application):
 
         self.zone_display_window = None
         self.settings_window = None
+        self.indicator = None
 
     def set_window(self):
         # get zone the cursor is located within
@@ -43,6 +45,40 @@ class Application(Gtk.Application):
         active_window = self.screen.get_active_window()
         geometry_mask = (Wnck.WindowMoveResizeMask.X | Wnck.WindowMoveResizeMask.Y | Wnck.WindowMoveResizeMask.WIDTH | Wnck.WindowMoveResizeMask.HEIGHT)
         active_window.set_geometry(Wnck.WindowGravity(0), geometry_mask, allocation.x, allocation.y, allocation.width, allocation.height)
+
+    def create_indicator(self):
+        # Create the AppIndicator
+        self.indicator = AppIndicator3.Indicator.new(
+            "linuxzones-indicator",
+            "linuxzones",
+            AppIndicator3.IndicatorCategory.APPLICATION_STATUS
+        )
+        self.indicator.set_status(AppIndicator3.IndicatorStatus.ACTIVE)
+
+        # Create the menu for the indicator
+        menu = Gtk.Menu()
+
+        # Add menu items
+        item_settings = Gtk.MenuItem(label="Settings")
+        item_settings.connect("activate", self.on_settings_clicked)
+        menu.append(item_settings)
+
+        item_quit = Gtk.MenuItem(label="Quit")
+        item_quit.connect("activate", self.on_quit_clicked)
+        menu.append(item_quit)
+
+        menu.show_all()
+
+        # Set the menu
+        self.indicator.set_menu(menu)
+
+    def on_settings_clicked(self, widget):
+        if not self.settings_window:
+            self.settings_window = SettingsWindow()
+        self.settings_window.show_all()
+
+    def on_quit_clicked(self, widget):
+        self.quit()
 
     # Controller
     def key_press(self, key):
@@ -134,6 +170,9 @@ class Application(Gtk.Application):
         # get screen interaction object
         self.screen = Wnck.Screen.get_default()
         self.screen.force_update()
+
+        # Create the AppIndicator
+        self.create_indicator()
 
     def do_activate(self):
         # Start the keyboard listener in its own thread
