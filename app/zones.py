@@ -1,15 +1,16 @@
-import gi
+from __future__ import annotations
+from typing import Optional, Tuple, Dict, List, Set
 import math
-import networkx as nx
 from itertools import groupby, chain
 
+import gi
+gi.require_version('Gtk', '3.0')
+from gi.repository import Gtk, Gdk
+
+import networkx as nx
 import shapely
 from shapely.geometry import LineString, Point
 from shapely.ops import linemerge, unary_union
-from typing import Optional, Tuple, Dict, List, Set
-
-gi.require_version('Gtk', '3.0')
-from gi.repository import Gtk, Gdk
 
 from .config import config
 from .widgets import Line
@@ -28,6 +29,10 @@ class Zone(Gtk.Box, SchemableMixin, GtkStyleableMixin):
     Attributes:
         schema (Schema): The schema object containing the bounds and ID of the zone.
         label (Gtk.Label): A label widget for displaying text within the zone.
+
+    Note:
+        This class inherits additional attributes and methods from SchemableMixin
+        and GtkStyleableMixin. Refer to their respective documentations for more details.
     """
 
     def __init__(self, schema: Schema):
@@ -59,13 +64,14 @@ class Zone(Gtk.Box, SchemableMixin, GtkStyleableMixin):
 
 class ZoneEdge(AbstractRectangleSide):
     """
-    Represents a side of a Zone object, allowing manipulation of its dimensions.
+    Represents a side of a Zone object, allowing manipulation of a zones side dimensions.
 
     Attributes:
         zone (Zone): The Zone object associated with this edge.
         side (Side): The specific side (TOP, BOTTOM, LEFT, RIGHT) of the Zone.
         axis (Axis): The axis (x or y) corresponding to the side.
     """
+
     def __init__(self, zone: Zone, side: Side):
         """
         Initializes the ZoneEdge with a Zone and a specified side.
@@ -84,7 +90,8 @@ class ZoneEdge(AbstractRectangleSide):
 
 class ZoneBoundary:
     """
-    Represents a boundary formed by multiple ZoneEdge objects, allowing manipulation of their positions.
+    Represents a boundary formed by multiple ZoneEdge objects, allowing manipulation of each ZoneEdge position forming
+    a cohesive boundary.
 
     This class manages a set of ZoneEdge objects that together form a single boundary in the zone layout.
     It provides methods for initializing, accessing, and manipulating the boundary's geometry and position.
@@ -94,7 +101,7 @@ class ZoneBoundary:
         _axis (Axis): The axis (x or y) along which the boundary is aligned.
         _position (LineString): The line representing the boundary's position.
         _center (Point): The center point of the boundary.
-        _buffer (Geometry): A buffer area surrounding the boundary's position.
+        _buffer (Geometry): A buffer area surrounding the boundary that extends to the sides but not the ends of the line.
     """
 
     def __init__(self, edges: List[ZoneEdge]):
@@ -107,7 +114,7 @@ class ZoneBoundary:
         self._axis = self._get_axis(self._edges)
         self._set_geometry_attributes()
 
-    def _set_geometry_attributes(self):
+    def _set_geometry_attributes(self) -> None:
         """
         Calculates and sets the geometric attributes of the boundary.
 
@@ -186,15 +193,15 @@ class ZoneBoundary:
 
     @property
     def buffer(self) -> shapely.buffer:
-        """The buffer area surrounding the boundary's position."""
+        """The buffer area surrounding the boundary. The buffer only extends to the sides but not the ends of the line."""
         return self._buffer
 
     def is_aligned(self, point: Point) -> bool:
         """
-        Checks if a given point is aligned with the boundary's longest edge within the buffer distance.
+        Checks if a given point is aligned with the boundary within the buffer distance.
 
         :param point: The Point to check for alignment.
-        :return: True if the point is aligned, False otherwise.
+        :return: True if the Point is aligned and within the given buffer distance, False otherwise.
         """
         spread = abs(point.y - self.center.y) if self.axis is Axis.x else abs(point.x - self.center.x)
         return spread <= config.settings.get('boundary-buffer-size')
@@ -209,9 +216,9 @@ class ZoneBoundary:
 
     def move_horizontal(self, position: int) -> None:
         """
-        Moves the boundary horizontally to a new position.
+        Moves a vertical boundary horizontally to a new position.
 
-        This method adjusts the width of adjacent zones when moving a vertical boundary.
+        This method adjusts the width and/or x-positions of adjacent zones to move a vertical boundary.
 
         :param position: New x-coordinate for the boundary.
         """
@@ -230,9 +237,9 @@ class ZoneBoundary:
 
     def move_vertical(self, position: int) -> None:
         """
-        Moves the boundary vertically to a new position.
+        Moves a horizontal boundary vertically to a new position.
 
-        This method adjusts the height of adjacent zones when moving a horizontal boundary.
+        This method adjusts the height and/or y-positions of adjacent zones when moving a horizontal boundary.
 
         :param position: New y-coordinate for the boundary.
         """
@@ -264,7 +271,7 @@ class RectangleSideGraph:
 
     def __init__(self, zones: List[Zone]):
         """
-        Initializes the RectangleSideGraph with a list of Schema objects generating a graph of rectangle edge relations
+        Initializes the RectangleSideGraph with a list of Zone objects generating a graph of rectangle edge relations
         based on their properties.
 
         :param zones: A list containing Zone objects representing rectangles.
@@ -289,7 +296,7 @@ class RectangleSideGraph:
         """
         nx.write_adjlist(self._graph, filename)
 
-    def get_connected_components(self):
+    def get_connected_components(self) -> List[Set]:
         """
         Retrieves a list of connected components in the graph.
 
@@ -297,13 +304,20 @@ class RectangleSideGraph:
         """
         return list(nx.connected_components(self._graph))
 
-    def _generate(self, zones: [Zone]):
+    def _generate(self, zones: [Zone]) -> None:
         """
-        Generates the graph by adding edges between adjacent rectangle sides based on their positions.
+        Generates the graph by adding edges between adjacent rectangle(Zone) sides based on their positions.
+
+        An adjacent edge in this context is defined as:
+        1. A pair of ZoneEdge objects that belong to different zones.
+        2. These edges are either touching or intersecting each other.
+        3. They are aligned along the same axis (either both vertical or both horizontal).
+        4. They are consecutive in the sorted order along their perpendicular axis; meaning no gaps exist between two
+           or more edges.
 
         :param zones: A list of Zone objects representing rectangles.
         """
-        # Add all possible edges
+        # Add all possible edges.
         y_nodes, x_nodes = [], []
         for zone in zones:
             left, right = ZoneEdge(zone, Side.LEFT), ZoneEdge(zone, Side.RIGHT)
@@ -312,8 +326,14 @@ class RectangleSideGraph:
             x_nodes.extend((top, bottom))
             self._graph.add_nodes_from((left, right, top, bottom))
 
-        y_nodes = self._sort_and_group(y_nodes, Axis.x)
-        x_nodes = self._sort_and_group(x_nodes, Axis.y)
+        # Sort and group nodes.
+        y_nodes = self._sort_and_group(y_nodes)
+        x_nodes = self._sort_and_group(x_nodes)
+
+        # Exclude edge groups at the container's borders (first and last groups).
+        # This retains internal zone boundaries of the graph, while omitting any boundary at the outer perimeter.
+        y_nodes = list(chain.from_iterable(y_nodes[1:-1]))
+        x_nodes = list(chain.from_iterable(x_nodes[1:-1]))
 
         # Connect nodes to form graph based on side positions. Forms connected components which represents boundaries.
         self._add_edges(y_nodes)
@@ -323,33 +343,38 @@ class RectangleSideGraph:
         isolated_nodes = list(nx.isolates(self._graph))
         self._graph.remove_nodes_from(isolated_nodes)
 
-    def _sort_and_group(self, nodes: List[Tuple[Schema, Side]], axis: Axis) -> List[Tuple[Schema, Side]]:
+    def _sort_and_group(self, nodes: List[ZoneEdge]) -> List[List[ZoneEdge]]:
         """
-        Sorts a list of nodes along the specified axis and groups them into unconnected components.
+        Sorts and groups edges to prepare for boundary formation.
 
-        This method sorts the given nodes by their positions along the specified
-        axis and the opposite axis. It then groups the nodes by their positions
-        along their axis to remove components that border the container.
+        For example, this method sorts and groups vertical edges as follows:
+        1. Sorts by x-position and then y-position to align vertical edges that share the same
+           x-position (vertical alignment) while ordering each aligned edge from top to bottom in vertical space.
+        2. Groups by x-position to form "unconnected components" or "boundaries".
 
-        :param nodes: A list of tuples containing Schema objects and their corresponding sides.
-        :param axis: The axis (Axis.x or Axis.y) along which to sort the nodes.
-        :return: A list of grouped nodes sorted by their positions.
+        For horizontal edges, the process is similar but sorts y-position first and x-position second.
+
+        This process supports proper boundary formation by ensuring geometrically
+        aligned edges are grouped and ordered correctly.
+
+        :param nodes: A list of ZoneEdge's.
+        :return: A list of nodes grouped by their alignment.
         """
-        # Determine the opposite axis for sorting
-        op_axis = Axis.y if axis is Axis.x else Axis.x
-        # Sort edges by their positions along the opposite axis and the given axis
-        nodes.sort(key=lambda node: (node.position.bounds[axis.value], node.position.bounds[op_axis.value]))
-        # Group the sorted sides by their position along the opposite axis
-        groups = [list(g) for k, g in groupby(nodes, key=lambda node: node.position.bounds[axis.value])]
+        # Determine the primary and opposite axis values for sorting
+        axis, op_axis = (Axis.y.value, Axis.x.value) if all(edge.axis is Axis.y for edge in nodes) else (Axis.x.value, Axis.y.value)
+        # Sort edges first by their position along the opposite axis and secondly by the primary axis.
+        nodes.sort(key=lambda node: (node.position.bounds[op_axis], node.position.bounds[axis]))
+        # Group the sorted sides by their position along the opposite axis to form unconnected components.
+        groups = [list(g) for k, g in groupby(nodes, key=lambda node: node.position.bounds[op_axis])]
 
-        return list(chain.from_iterable(groups[1:-1]))
+        return groups
 
     def _add_edges(self, nodes: List[Tuple[Schema, Side]]) -> None:
         """
         Adds edges between nodes representing adjacent rectangle sides if they touch or intersect.
 
-        This method iterates through pairs of adjacent nodes and adds edges
-        between them if their positions touch or intersect.
+        This method iterates through pairs of sorted adjacent nodes and adds edges between them if
+        their positions touch or intersect representing zone boundaries in the graph structure.
 
         :param nodes: A list of tuples containing Schema objects and their corresponding sides.
         """
@@ -384,17 +409,18 @@ class ZoneContainer(Gtk.Fixed):
         :param widget: The widget that received the signal.
         :param allocation: The allocation (Gtk.Allocation) containing the new size.
         """
-        # Sort zones by the Euclidean distance of their (x, y) bounds relative to the orign
+        # Sort zones by the Euclidean distance of their (x, y) bounds relative to the orign.
         sorted_zones = sorted(self.get_children(), key=lambda zone: math.dist((0, 0), (zone.schema.x, zone.schema.y)))
+
         for i, zone in enumerate(sorted_zones):
             if zone.schema.is_normal:
                 zone.schema.scale(allocation.width, allocation.height)
 
-            # Translate zone position relative to container position
+            # Translate zone position relative to container position.
             zone.schema.x += allocation.x
             zone.schema.y += allocation.y
 
-            # Label zones based on proximity to the origin from lower(closer) to higher(further)
+            # Label zones based on proximity to the origin from lower(closer) to higher(further).
             zone.label.set_label(str(i+1))
             zone.size_allocate(zone.schema.rectangle)
 
@@ -414,7 +440,7 @@ class ZoneContainer(Gtk.Fixed):
             if allocation.x <= x < allocation.x + allocation.width and allocation.y <= y < allocation.y + allocation.height:
                 return zone
 
-    def add_zone_style_class(self, *style_classes):
+    def add_zone_style_class(self, *style_classes) -> ZoneContainer:
         """
         Adds style classes to all children in the container.
         :param style_classes: One or more style class names to add.
@@ -427,7 +453,7 @@ class ZoneContainer(Gtk.Fixed):
 
     def divide(self, zone: Zone, line: Line) -> None:
         """
-        Divides a Zone into two new zones along the specified line.
+        Divides a Zone into two new zones along the given Line.
 
         This method takes an existing Zone and splits it into two new Zones based on
         the position of the provided Line. The division can be either horizontal or
@@ -478,11 +504,11 @@ class ZoneContainer(Gtk.Fixed):
 
 class ZoneDisplayWindow(TransparentApplicationWindow):
     """
-    A window that displays and manages multiple Zone objects within a ZoneContainer.
+    A TransparentApplicationWindow that displays and manages multiple Zone objects within a ZoneContainer.
 
     Attributes:
-        __container (ZoneContainer): The container holding Zone objects.
-        __active_zone (Zone): The currently active Zone object.
+        _container (ZoneContainer): The container holding Zone objects.
+        _active_zone (Zone): The currently active Zone object.
     """
 
     def __init__(self, schemas: List[Dict]):
