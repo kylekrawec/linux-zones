@@ -1,5 +1,3 @@
-import os
-
 import gi
 gi.require_version('Gtk', '3.0')
 gi.require_version('Wnck', '3.0')
@@ -10,7 +8,7 @@ from pynput import keyboard, mouse
 from .base import State
 from .zones import ZoneDisplayWindow
 from .display import get_workarea
-from .config import config
+from .config import config, resource_path
 from .settings import SettingsWindow
 
 
@@ -163,8 +161,8 @@ class Application(Gtk.Application):
         Gtk.Application.do_startup(self)
 
         # Load and register app resources
-        resource_path = os.path.abspath('resources/app.gresource')
-        resource = Gio.Resource.load(resource_path)
+        path = resource_path('resources/app.gresource')
+        resource = Gio.Resource.load(path)
         Gio.resources_register(resource)
 
         # get screen interaction object
