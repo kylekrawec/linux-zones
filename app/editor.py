@@ -73,14 +73,14 @@ class BoundPoint(Gtk.Button):
 
         # Calculate the lower bound
         lower = max(
-            getattr(edge.zone.schema, edge_attr)
+            getattr(edge.zone.get_allocation(), edge_attr)
             for edge in self.boundary.get_edges()
             if edge.side is lower_side
         ) + config.settings.get('boundary-buffer-size')
 
         # Calculate the upper bound
         upper = min(
-            getattr(edge.zone.schema, edge_attr) + getattr(edge.zone.schema, size_attr)
+            getattr(edge.zone.get_allocation(), edge_attr) + getattr(edge.zone.get_allocation(), size_attr)
             for edge in self.boundary.get_edges()
             if edge.side is not lower_side
         ) - config.settings.get('boundary-buffer-size')
@@ -406,7 +406,7 @@ class ZoneEditorWindow(TransparentApplicationWindow):
             preset-save: Emitted with updated presets dictionary.
         """
         width, height = self._container.get_allocated_width(), self._container.get_allocated_height()
-        schemas = [zone.schema.get_normalized(width, height).__dict__() for zone in self._container.get_children()]
+        schemas = [zone.allocation.get_normalized(width, height).__dict__() for zone in self._container.get_children()]
         presets = config.presets
         presets[self._container.id] = schemas
         config.save(presets, 'presets.json')

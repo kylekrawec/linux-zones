@@ -28,6 +28,7 @@ class Zone(Gtk.Box, SchemableMixin, GtkStyleableMixin):
 
     Attributes:
         schema (Schema): The schema object containing the bounds and ID of the zone.
+        allocation (Schema): A schema object containing the scaled bounds and ID of the zone.
         label (Gtk.Label): A label widget for displaying text within the zone.
 
     Note:
@@ -46,20 +47,21 @@ class Zone(Gtk.Box, SchemableMixin, GtkStyleableMixin):
         self.label = Gtk.Label()
         self.set_center_widget(self.label)
 
-    def resize(self, allocation: Gdk.Rectangle) -> None:
-        """
-        Resizes the zone based on a new allocation.
+        # Declare the schema allocation object.
+        self.__allocation = Schema(schema.__dict__())
+        self.__allocation.is_normal = False
+        self.connect('size-allocate', self._on_size_allocation)
 
-        Updates the schema attributes (x, y, width, height) based on the new allocation
-        and then calls the size_allocate method to apply the changes to the Gtk.Box.
+    def _on_size_allocation(self, widget, allocation):
+        # Scale schema allocation to current allocation.
+        self.__allocation.x = allocation.x
+        self.__allocation.y = allocation.y
+        self.__allocation.width = allocation.width
+        self.__allocation.height = allocation.height
 
-        :param allocation: The Gdk.Rectangle object containing the new size and position.
-        """
-        self.schema.x = allocation.x
-        self.schema.y = allocation.y
-        self.schema.width = allocation.width
-        self.schema.height = allocation.height
-        self.size_allocate(allocation)
+    @property
+    def allocation(self) -> Schema:
+        return self.__allocation
 
 
 class ZoneEdge(AbstractRectangleSide):
@@ -79,13 +81,13 @@ class ZoneEdge(AbstractRectangleSide):
         :param zone: The Zone object associated with this side.
         :param side: The specific side (TOP, BOTTOM, LEFT, RIGHT) of the Zone.
         """
-        super().__init__(zone.schema, side)
+        super().__init__(zone.get_allocation(), side)
         self.zone = zone  # The Zone object associated with this side
         self.axis = Axis.x if side in {Side.TOP, Side.BOTTOM} else Axis.y  # Determine the axis based on the side
 
     @property
     def rectangle(self) -> Gdk.Rectangle:
-        return self.zone.schema.rectangle
+        return self.zone.get_allocation()
 
 
 class ZoneBoundary:
@@ -232,7 +234,7 @@ class ZoneBoundary:
                 else:
                     # Adjust the width when moving the right edge
                     allocation.width = position - allocation.x
-                edge.zone.resize(allocation)
+                edge.zone.size_allocate(allocation)
             self._set_geometry_attributes()
 
     def move_vertical(self, position: int) -> None:
@@ -253,7 +255,7 @@ class ZoneBoundary:
                 else:
                     # Adjust the height when moving the bottom edge
                     allocation.height = position - allocation.y
-                edge.zone.resize(allocation)
+                edge.zone.size_allocate(allocation)
             self._set_geometry_attributes()
 
 
@@ -369,14 +371,14 @@ class RectangleSideGraph:
 
         return groups
 
-    def _add_edges(self, nodes: List[Tuple[Schema, Side]]) -> None:
+    def _add_edges(self, nodes: List[ZoneEdge]) -> None:
         """
         Adds edges between nodes representing adjacent rectangle sides if they touch or intersect.
 
         This method iterates through pairs of sorted adjacent nodes and adds edges between them if
         their positions touch or intersect representing zone boundaries in the graph structure.
 
-        :param nodes: A list of tuples containing Schema objects and their corresponding sides.
+        :param nodes: A list of ZoneEdge objects.
         """
         for u, v in zip(nodes, nodes[1:]):
             if u.position.intersects(v.position) or u.position.touches(v.position):
@@ -413,16 +415,16 @@ class ZoneContainer(Gtk.Fixed):
         sorted_zones = sorted(self.get_children(), key=lambda zone: math.dist((0, 0), (zone.schema.x, zone.schema.y)))
 
         for i, zone in enumerate(sorted_zones):
-            if zone.schema.is_normal:
-                zone.schema.scale(allocation.width, allocation.height)
+            # Scaled default schema on allocation.
+            schema = zone.schema.get_scaled(allocation.width, allocation.height)
 
-            # Translate zone position relative to container position.
-            zone.schema.x += allocation.x
-            zone.schema.y += allocation.y
+            # Translate absolute schema positions relative to container position.
+            schema.x += allocation.x
+            schema.y += allocation.y
 
             # Label zones based on proximity to the origin from lower(closer) to higher(further).
             zone.label.set_label(str(i+1))
-            zone.size_allocate(zone.schema.rectangle)
+            zone.size_allocate(schema.rectangle)
 
     def get_zone(self, x, y) -> Zone:
         """

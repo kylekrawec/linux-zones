@@ -140,19 +140,6 @@ class Schema:
         new_schema.is_normal = False
         return new_schema
 
-    def scale(self, width: int, height: int):
-        """
-        Scale the schema from normalized coordinates to pixel coordinates.
-
-        :param width: The width to scale to.
-        :param height: The height to scale to.
-        :raises AssertionError: If the schema is not in normalized coordinates.
-        :raises ScalingFailureException: If scaling results in non-normal coordinates.
-        """
-        new_schema = self.get_scaled(width, height)
-        self.x, self.y, self.width, self.height = new_schema.x, new_schema.y, new_schema.width, new_schema.height
-        self.is_normal = False
-
     def get_normalized(self, width: int, height: int) -> 'Schema':
         """
         Get a normalized Schema from pixel coordinates to 0-1 range.
@@ -179,19 +166,6 @@ class Schema:
                 f'{self.__class__} failed to be normalized. Ensure width and height values are greater than schema width and height.')
 
         return new_schema
-
-    def normalize(self, width: int, height: int):
-        """
-        Normalize the schema from pixel coordinates to 0-1 range.
-
-        :param width: The width to normalize against.
-        :param height: The height to normalize against.
-        :raises AssertionError: If the schema is already normalized or if width/height are invalid.
-        :raises NormalizationFailureException: If normalization results in out-of-range values.
-        """
-        new_schema = self.get_normalized(width, height)
-        self.x, self.y, self.width, self.height = new_schema.x, new_schema.y, new_schema.width, new_schema.height
-        self.is_normal = True
 
     @staticmethod
     def generate_id() -> str:
@@ -240,9 +214,13 @@ class TransparentApplicationWindow(Gtk.ApplicationWindow):
 class SchemableMixin:
     """Applies Schema requirements to its subclass."""
     def __init__(self, schema: Schema):
-        self.schema = schema
+        self.__schema = schema
         if not issubclass(type(self), Gtk.Widget):
             raise TypeError(f"{self.__class__} requires inheritance from Gtk.Widget")
+
+    @property
+    def schema(self) -> Schema:
+        return self.__schema
 
 
 class GtkStyleableMixin:
