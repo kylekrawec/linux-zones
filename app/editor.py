@@ -125,6 +125,7 @@ class Editor(Gtk.Layout):
         self._boundary_point_map = {Axis.x: {}, Axis.y: {}}
         self.visible_point: Optional[BoundPoint] = None
         self.boundaries = None
+        self._zones = None
 
         # Make the editor a drag destination
         self.drag_dest_set(Gtk.DestDefaults.ALL, [], Gdk.DragAction.MOVE)
@@ -185,6 +186,7 @@ class Editor(Gtk.Layout):
         point = Gtk.drag_get_source_widget(context)
         if point.is_valid_position(x, y):
             self.move(point, x, y)
+            self.label_zone_dimentions()
         return True
 
     def _set_visible_point(self, point: Optional[BoundPoint] = None):
@@ -198,6 +200,11 @@ class Editor(Gtk.Layout):
         if point:
             point.show()
         self.visible_point = point
+
+    def label_zone_dimentions(self):
+        for zone in self._zones:
+            width, height = zone.get_allocated_width(), zone.get_allocated_height()
+            zone.label.set_label(f'{width} x {height}')
 
     def move(self, widget: BoundPoint, x: int, y: int):
         """
@@ -265,6 +272,7 @@ class Editor(Gtk.Layout):
         :param zones: A list of Zone objects to set up the editor with.
         """
         self._clear()
+        self._zones = zones
         self.boundaries = self.create_boundaries(zones)
         for point in self.create_boundpoints(self.boundaries):
             self._boundary_point_map[point.boundary.axis][point.boundary] = point

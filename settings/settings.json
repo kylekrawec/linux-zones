@@ -7,7 +7,7 @@
     "4": "Quarters",
     "6": "Six Zones"
   },
-  "default_preset": "Center Right Bias",
+  "default_preset": "Center Bias",
   "boundary-buffer-size": 100,
   "resource-prefix": "/org/linuxzones/app"
 }
