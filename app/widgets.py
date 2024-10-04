@@ -1,9 +1,11 @@
 import cairo
 import gi
 gi.require_version('Gtk', '3.0')
-from gi.repository import Gtk, GObject
+from gi.repository import Gtk, GObject, Pango
 
+from .config import config
 from .base import Axis, create_icon
+from .base import GtkStyleableMixin
 
 
 class Line(Gtk.DrawingArea):
@@ -164,3 +166,75 @@ class DropDownMenu(Gtk.Button):
         self.menu.append(menu_item)
         menu_item.connect('activate', callback)
         menu_item.show_all()
+
+
+class Label(Gtk.DrawingArea, GtkStyleableMixin):
+    """
+    A custom Label widget that uses Cairo for drawing and supports CSS styling.
+
+    This class extends Gtk.DrawingArea and uses the GtkStyleableMixin to provide
+    a customizable label with precise rendering control. It uses Cairo for drawing
+    the text and applies styles from CSS classes.
+
+    Attributes:
+        _text (str): The text to be displayed in the label.
+
+    CSS Styling:
+        The label can be styled using CSS classes. The following properties are supported:
+        - background-color: Sets the background color of the label.
+        - color: Sets the text color.
+        - font-family: Sets the font family.
+        - font-size: Sets the font size.
+        - font-style: Sets the font style (normal or italic).
+        - font-weight: Sets the font weight (normal or bold).
+
+    Note:
+        This widget uses a fixed size determined by the 'boundary-buffer-size'
+        setting in the config. Ensure this setting is properly configured.
+    """
+    def __init__(self):
+        super().__init__()
+        self._text = ''
+        size = config.settings.get('boundary-buffer-size')
+        self.set_size_request(size, size)
+        self.connect('draw', self._on_draw)
+
+    def set_label(self, text: str):
+        self._text = text
+        self.queue_draw()
+
+    def _on_draw(self, widget, cr):
+        context = self.get_style_context()
+
+        # Get background color from CSS
+        bg_color = context.get_property('background-color', Gtk.StateFlags.NORMAL)
+        cr.set_source_rgba(bg_color.red, bg_color.green, bg_color.blue, bg_color.alpha)
+        cr.paint()
+
+        # Get font properties from CSS
+        font_description = context.get_font(Gtk.StateFlags.NORMAL)
+        font_family = font_description.get_family()
+        font_size = font_description.get_size() / Pango.SCALE
+        font_style = cairo.FONT_SLANT_NORMAL if font_description.get_style() == Pango.Style.NORMAL else cairo.FONT_SLANT_ITALIC
+        font_weight = cairo.FONT_WEIGHT_NORMAL if font_description.get_weight() == Pango.Weight.NORMAL else cairo.FONT_WEIGHT_BOLD
+
+        # Apply font properties
+        cr.select_font_face(font_family, font_style, font_weight)
+        cr.set_font_size(font_size)
+
+        # Get text color from CSS
+        text_color = context.get_color(Gtk.StateFlags.NORMAL)
+        cr.set_source_rgba(text_color.red, text_color.green, text_color.blue, text_color.alpha)
+
+        # Get the text dimensions
+        (x, y, width, height, dx, dy) = cr.text_extents(self._text)
+
+        # Center the text
+        widget_width = self.get_allocated_width()
+        widget_height = self.get_allocated_height()
+        x = (widget_width - width) / 2
+        y = (widget_height + height) / 2
+
+        # Draw the text
+        cr.move_to(x, y)
+        cr.show_text(self._text)

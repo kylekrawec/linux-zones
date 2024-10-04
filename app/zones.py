@@ -13,7 +13,7 @@ from shapely.geometry import LineString, Point
 from shapely.ops import linemerge, unary_union
 
 from .config import config
-from .widgets import Line
+from .widgets import Line, Label
 from .display import get_workarea
 from .base import Axis, Side, AbstractRectangleSide, Schema, TransparentApplicationWindow
 from .base import GtkStyleableMixin, SchemableMixin
@@ -44,7 +44,7 @@ class Zone(Gtk.Box, SchemableMixin, GtkStyleableMixin):
         """
         Gtk.Box.__init__(self)
         SchemableMixin.__init__(self, schema)
-        self.label = Gtk.Label()
+        self.label = Label()
         self.set_center_widget(self.label)
 
         # Declare the schema allocation object.
@@ -423,7 +423,6 @@ class ZoneContainer(Gtk.Fixed):
             schema.y += allocation.y
 
             # Label zones based on proximity to the origin from lower(closer) to higher(further).
-            zone.label.set_label(str(i+1))
             zone.size_allocate(schema.rectangle)
 
     def get_zone(self, x, y) -> Zone:
