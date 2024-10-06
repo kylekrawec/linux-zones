@@ -28,7 +28,6 @@ class Zone(Gtk.Box, SchemableMixin, GtkStyleableMixin):
 
     Attributes:
         schema (Schema): The schema object containing the bounds and ID of the zone.
-        allocation (Schema): A schema object containing the scaled bounds and ID of the zone.
         label (Gtk.Label): A label widget for displaying text within the zone.
 
     Note:
@@ -47,22 +46,23 @@ class Zone(Gtk.Box, SchemableMixin, GtkStyleableMixin):
         self.label = Label()
         self.set_center_widget(self.label)
 
-        # Declare the schema allocation object.
-        self.__allocation = Schema(schema.__dict__())
-        self.__allocation.is_normal = False
-        self.connect('size-allocate', self._on_size_allocation)
-
-    def _on_size_allocation(self, widget, allocation):
-        # Scale schema allocation to current allocation.
-        self.__allocation.x = allocation.x
-        self.__allocation.y = allocation.y
-        self.__allocation.width = allocation.width
-        self.__allocation.height = allocation.height
-
     @property
     def allocation(self) -> Schema:
-        return self.__allocation
+        """
+        Get the current allocation of the Zone as a Schema object.
 
+        This property retrieves the current allocation (size and position) of the Zone
+        widget and returns it as a Schema object. The returned Schema includes the
+        widget's current dimensions and position, and preserves the ID from the
+        original schema.
+
+        :return: A Schema object representing the current allocation of the Zone.
+                The Schema includes the widget's current size and position, with
+                the ID set to match the original schema's ID.
+        """
+        schema = Schema(self.get_allocation())
+        schema.id = self.schema.id
+        return schema
 
 class ZoneEdge(AbstractRectangleSide):
     """
@@ -398,12 +398,39 @@ class ZoneContainer(Gtk.Fixed):
         super().__init__()
         self.id = _id
         self._style_classes = None
+
+        # Add Zone objects based on schemas to the container
         for i, schema in enumerate(schemas):
-            zone = Zone(Schema(schema))
-            zone.label.set_label(str(i+1))
-            self.add(zone)  # Add Zone objects to the container
+            self.add(Zone(Schema(schema)))
 
         self.connect('size-allocate', self._on_size_allocate)
+
+    def add(self, zone: Zone):
+        """
+        Add a Zone to the container and update the labels of all zones.
+
+        This method overrides the default `add` method of Gtk.Fixed to provide
+        additional functionality specific to ZoneContainer:
+
+        1. It adds the given Zone to the container using the superclass method.
+        2. It then sorts all child zones based on their Euclidean distance from
+        the origin (0, 0), using their schema's x and y coordinates; it does so
+        specifically to order labels, NOT the position of each zone within the
+        ZoneContainer.
+        3. Finally, it updates the label of each zone to reflect its new order
+        in the sorted list.
+
+        :param zone: The Zone object to be added to the container.
+        """
+        # Add the zone to the ZoneContainer (Gtk.Fixed) object.
+        super().add(zone)
+
+        # Sort zones by the Euclidean distance of their (x, y) bounds relative to the orign.
+        sorted_zones = sorted(self.get_children(), key=lambda zone: math.dist((0, 0), (zone.schema.x, zone.schema.y)))
+
+        # Assign labels based on sorted zones (Euclidean distance to origin).
+        for i, zone in enumerate(sorted_zones):
+            zone.label.set_label(str(i+1))
 
     def _on_size_allocate(self, widget, allocation) -> None:
         """
@@ -411,19 +438,49 @@ class ZoneContainer(Gtk.Fixed):
         :param widget: The widget that received the signal.
         :param allocation: The allocation (Gtk.Allocation) containing the new size.
         """
-        # Sort zones by the Euclidean distance of their (x, y) bounds relative to the orign.
-        sorted_zones = sorted(self.get_children(), key=lambda zone: math.dist((0, 0), (zone.schema.x, zone.schema.y)))
-
-        for i, zone in enumerate(sorted_zones):
+        for i, zone in enumerate(self.get_children()):
             # Scaled default schema on allocation.
-            schema = zone.schema.get_scaled(allocation.width, allocation.height)
+            zone_allocation = zone.schema.get_scaled(allocation.width, allocation.height)
 
             # Translate absolute schema positions relative to container position.
-            schema.x += allocation.x
-            schema.y += allocation.y
+            zone_allocation.x += allocation.x
+            zone_allocation.y += allocation.y
 
             # Label zones based on proximity to the origin from lower(closer) to higher(further).
-            zone.size_allocate(schema.rectangle)
+            zone.size_allocate(zone_allocation.rectangle)
+
+    def _update_allocation(self):
+        """
+        Update the schemas of all child zones within the container.
+
+        This method is called internally to ensure that the schemas of all child zones
+        accurately reflect any changes in their allocations. It performs the following tasks:
+
+        This method is typically called after operations that might affect zone layouts,
+        such as dividing a zone or resizing the container.
+
+        Note:
+            - For zones with non-normal schemas, it normalizes based on the existing schema.
+            - For zones with normal schemas, it normalizes based on the current allocation.
+        """
+        width, height = self.get_allocated_width(), self.get_allocated_height()
+        # update schemas to reflect possible allocation changes
+        for zone in self.get_children():
+            if not zone.schema.is_normal:
+                # normalize non-normal schema relative to allocated ZoneContainer
+                normalized_schema = zone.schema.get_normalized(width, height)
+            else:
+                # normalize allocated schema relative to allocated ZoneContainer
+                normalized_schema = zone.allocation.get_normalized(width, height)
+            zone.update_schema(normalized_schema)
+
+            # apply existing style classes
+            if self._style_classes:
+                zone.add_style_class(*self._style_classes)
+
+        # Update the container's display if it's currently visible
+        if self.is_visible():
+            self.show_all()
 
     def get_zone(self, x, y) -> Zone:
         """
@@ -469,7 +526,7 @@ class ZoneContainer(Gtk.Fixed):
             raise ValueError(f"Zone must be a child of {self.__class__.__name__} to divide.")
 
         # Get the current allocation of the zone and create two copies
-        allocation = zone.get_allocation()
+        allocation = zone.allocation
         alloc_a, alloc_b = allocation.copy(), allocation.copy()
 
         # Adjust allocations based on the line's axis and position
@@ -489,19 +546,12 @@ class ZoneContainer(Gtk.Fixed):
         # Remove the original zone
         self.remove(zone)
 
-        # Create new zones based on the adjusted allocations
-        new_zones = [Zone(Schema(alloc)) for alloc in (alloc_a, alloc_b)]
+        # Add new zones based on the divided allocations
+        self.add(Zone(alloc_a))
+        self.add(Zone(alloc_b))
 
-        # Add new zones to the container and apply style classes if any
-        for zone in new_zones:
-            self.add(zone)
-            if self._style_classes:
-                zone.add_style_class(*self._style_classes)
-
-        # Update the container's display if it's currently visible
-        if self.is_visible():
-            self.show_all()
-
+        # Update the container allocation on zone changes
+        self._update_allocation()
 
 class ZoneDisplayWindow(TransparentApplicationWindow):
     """

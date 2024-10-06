@@ -167,6 +167,14 @@ class Schema:
 
         return new_schema
 
+    def copy(self) -> 'Schema':
+        """
+        Create and return a new Schema object with the same attributes as this one.
+
+        :return: A new Schema instance that is a copy of the current one.
+        """
+        return Schema(self.__dict__())
+
     @staticmethod
     def generate_id() -> str:
         """
@@ -221,6 +229,20 @@ class SchemableMixin:
     @property
     def schema(self) -> Schema:
         return self.__schema
+
+    def update_schema(self, schema: Schema):
+        """
+        Update the schema of the object while preserving its ID.
+
+        This method replaces the current schema with a new one, but keeps the original
+        schema's ID. This allows for updating the schema's content without changing its
+        identifier.
+
+        :param schema: The new schema to be applied to the object.
+        """
+        _id = self.__schema.id
+        self.__schema = schema
+        self.__schema.id = _id
 
 
 class GtkStyleableMixin:
