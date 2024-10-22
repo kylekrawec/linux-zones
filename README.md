@@ -7,11 +7,11 @@ it allows you to create custom window layouts to organize your workspace efficie
 windows into predefined zones with a hotkey, making multitasking smoother and more intuitive.
 
 ## What It Does
-![snap-zones](https://github.com/user-attachments/assets/2c772244-5f53-40b9-b064-045f2b99bb3a)
+[snap-zones.webm](https://github.com/user-attachments/assets/e313df05-5b62-4923-bbae-e453294ee180)
 - **Easy Window Snapping**: Quickly snap windows into your custom zones using simple mouse and keyboard actions.
 - **Custom Window Layouts**: Design and save personalized window zones that suit your workflow.
 
-![edit-zones](https://github.com/user-attachments/assets/32742d14-46ac-4ce8-9b63-0607e4a1a61f)
+[edit-zones.webm](https://github.com/user-attachments/assets/5c4b51af-c409-4465-85ed-b1c16ec2741d)
 - **Zone Editing**: Modify and adjust your zones at any time with an intuitive editor.
 - **System Tray Integration**: Access settings and options directly from the system tray icon.
 
